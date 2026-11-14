@@ -10,9 +10,9 @@
 
 [Releases](https://github.com/lesliechowsh/quik/releases/latest) から `Quik-<version>.dmg` をダウンロードし、開いて Quik を Applications にドラッグします。macOS 14 以降が必要で、Apple Silicon と Intel の両方に対応します。
 
-初回起動時に開発者を確認できない旨の警告が出ます。このコミュニティビルドは公証されていないためです。「システム設定 > プライバシーとセキュリティ」を開き、「セキュリティ」欄の「このまま開く」をクリックして確認します。macOS 14 では Quik を右クリックして「開く」で構いません。次回以降は表示されません。
+公開版は Developer ID で署名し、Apple の公証を受けています。初回起動時にセキュリティ警告は出ません。ソースからビルドしたものは ad-hoc 署名で、初回起動時に「システム設定 > プライバシーとセキュリティ」で「このまま開く」が必要です。
 
-この手順をなくすには Apple Developer Program の Developer ID 証明書と公証が必要です。証明書が用意できたら、メンテナは `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` を実行すると警告の出ないパッケージを作れます。
+公開するときは `QUIK_SIGN_IDENTITY` と `QUIK_NOTARY_PROFILE` を設定します。`scripts/package.sh` が署名、公証、ステープルまで行います。
 
 ## ビルドと実行
 

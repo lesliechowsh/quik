@@ -58,6 +58,19 @@ done
 mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/Quik.app"
 ln -s /Applications "$STAGE/Applications"
+if [ "$REAL_IDENTITY" = 1 ]; then
+cat > "$STAGE/安装说明.txt" <<'EOF'
+Quik 安装说明
+
+1. 把 Quik 拖到右边的 Applications 文件夹。
+2. 从 Applications 打开 Quik。这个安装包已通过 Apple 公证，可以直接打开。
+
+Install
+
+1. Drag Quik into the Applications folder.
+2. Open Quik from Applications. This build is notarized by Apple and opens directly.
+EOF
+else
 cat > "$STAGE/安装说明.txt" <<'EOF'
 Quik 安装说明
 
@@ -77,6 +90,7 @@ Install
    On macOS 14, Control-click Quik and choose Open.
 4. Later launches do not ask.
 EOF
+fi
 
 rm -f "$DMG" "$ZIP"
 hdiutil create -volname Quik -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
@@ -116,23 +130,24 @@ if [ ! -L "$MOUNT/Applications" ] || [ "$(readlink "$MOUNT/Applications")" != "/
   echo "FAIL DMG is missing the Applications symlink" >&2
   exit 1
 fi
+# spctl on the DMG itself reports "does not seem to be an app"; assess the app
+# inside, which is what Gatekeeper checks when the user opens it.
+APP_GK_OK=0
+APP_GK_OUT="$(spctl -a -vv "$MOUNT/Quik.app" 2>&1)" && APP_GK_OK=1 || true
 hdiutil detach "$MOUNT" >/dev/null
 rm -rf "$MOUNT"
 MOUNT=""
-
-GK_OK=0
-GK_OUT="$(spctl -a -vv "$DMG" 2>&1)" && GK_OK=1 || true
 
 echo "version: $VERSION"
 echo "architectures: $BUILT_ARCHS"
 echo "DMG: $(pwd)/$DMG ($(du -h "$DMG" | awk '{print $1}'))"
 echo "ZIP: $(pwd)/$ZIP ($(du -h "$ZIP" | awk '{print $1}'))"
 echo "checksums: $(pwd)/$PKG_DIR/SHA256SUMS"
-if [ "$GK_OK" = 1 ]; then
+if [ "$APP_GK_OK" = 1 ]; then
   echo "gatekeeper: accepted"
 else
   echo "gatekeeper: rejected"
-  printf '%s\n' "$GK_OUT" | sed 's/^/  /'
+  printf '%s\n' "$APP_GK_OUT" | sed 's/^/  /'
 fi
 if [ "$REAL_IDENTITY" != 1 ]; then
   echo "First launch needs System Settings > Privacy & Security > Open Anyway."

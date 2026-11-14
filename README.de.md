@@ -10,9 +10,9 @@ Natives Swift, keine Fremdbibliotheken. Gemessene Kosten im eingeschwungenen Zus
 
 Lade `Quik-<version>.dmg` von [Releases](https://github.com/lesliechowsh/quik/releases/latest) herunter, öffne das Image und ziehe Quik in den Ordner Programme. Benötigt macOS 14 oder neuer, auf Apple Silicon und Intel.
 
-Beim ersten Start meldet macOS, dass der Entwickler nicht überprüft werden kann, weil dieser Community-Build nicht notarisiert ist. Öffne Systemeinstellungen > Datenschutz & Sicherheit, scrolle zum Abschnitt Sicherheit und klicke auf „Dennoch öffnen“, dann bestätige. Unter macOS 14 genügt ein Rechtsklick auf Quik und „Öffnen“. Danach fragt macOS nicht mehr.
+Veröffentlichte Versionen sind mit einer Developer ID signiert und von Apple notarisiert. Der erste Start zeigt daher keine Sicherheitswarnung. Ein Build aus dem Quellcode ist ad-hoc signiert; bei seinem ersten Start ist Systemeinstellungen > Datenschutz & Sicherheit > „Dennoch öffnen“ nötig.
 
-Um diesen Schritt zu entfernen, braucht es ein Developer-ID-Zertifikat aus dem Apple Developer Program und eine Notarisierung. Sobald es vorliegt, erzeugt der Maintainer mit `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` ein Paket ohne Warnung.
+Zum Veröffentlichen `QUIK_SIGN_IDENTITY` und `QUIK_NOTARY_PROFILE` setzen; `scripts/package.sh` signiert, notarisiert und heftet das Ticket an.
 
 ## Bauen und starten
 

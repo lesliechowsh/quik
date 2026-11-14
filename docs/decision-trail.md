@@ -197,3 +197,15 @@
 验证结果。`package.sh` 输出 `architectures: x86_64 arm64`，DMG 904 KB，`spctl` 仍然 rejected，符合预期。`verify-package.sh` 的五项断言全部 PASS，`spctl` 一条 WARN，打包后的应用成功启动并退出。`SHA256SUMS` 用 `shasum -c` 复核通过。
 
 残余代价写进了五种语言的 README 和 DMG 里的说明文件。首次打开要去系统设置点一次"仍要打开"。这是没有证书时的上限。
+
+### 公证与 0.1.1
+
+用户选了个人 Developer ID，明确接受签名里出现法定姓名，公司团队永久排除。
+
+证书没有用 Xcode 创建。钥匙串访问生成 CSR，开发者门户上传后签发 Developer ID Application 证书，双击导入即与私钥配对。公证凭据用 App 专用密码存进钥匙串，`xcrun notarytool history` 能正常返回。
+
+`package.sh` 直接复用已有的签名与公证分支。第一次提交 `ef30da40` 通过，staple 成功。随后发现两个只有真实产物才会暴露的问题。`spctl` 对 DMG 报 "does not seem to be an app"，应该评估 DMG 里的应用；安装说明还在告诉用户会看到“仍要打开”，与公证版不符。两处都改掉后重新提交 `14cc2aab`，同样 Accepted。
+
+最终结果。`package.sh` 打印 `gatekeeper: accepted`。`verify-package.sh` 六项 PASS，`spctl` 返回 `source=Notarized Developer ID`。把应用拷出来加上 `com.apple.quarantine` 属性后启动，进程正常起来，没有拦截。版本升到 0.1.1，0.1.0 保持原样。
+
+DMG 已 staple，应用本体没有单独 staple，首次启动由 Gatekeeper 在线核验。离线首启是否会被拦没有验证，这是当前分发的残余风险。

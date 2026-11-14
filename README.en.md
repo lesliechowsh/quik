@@ -10,9 +10,9 @@ Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of
 
 Download `Quik-<version>.dmg` from [Releases](https://github.com/lesliechowsh/quik/releases/latest), open it, and drag Quik into Applications. Requires macOS 14 or later, on Apple Silicon and Intel.
 
-The first launch warns that the developer cannot be verified, because this community build is not notarized. Open System Settings > Privacy & Security, scroll to the Security section, click "Open Anyway", and confirm. On macOS 14, Control-click Quik and choose Open instead. Later launches do not ask.
+Releases are signed with a Developer ID and notarized by Apple, so the first launch shows no security warning. Builds from source are ad-hoc signed; their first launch needs System Settings > Privacy & Security > Open Anyway.
 
-Removing that step requires a Developer ID certificate from the Apple Developer Program and notarization. With one in place, the maintainer runs `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` to produce a warning-free package.
+To publish, set `QUIK_SIGN_IDENTITY` and `QUIK_NOTARY_PROFILE`; `scripts/package.sh` signs, notarizes, and staples.
 
 ## Build and run
 
