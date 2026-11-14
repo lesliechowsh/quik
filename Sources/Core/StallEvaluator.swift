@@ -58,8 +58,8 @@ struct StallEvaluator: Sendable {
             memoryPressure: delta.memoryPressure,
             compressorBytes: delta.compressorBytes,
             swapUsedBytes: delta.swapUsedBytes,
-            diskReadBytesPerSecond: UInt64(max(delta.diskReadBytesPerSecond, 0)),
-            diskWriteBytesPerSecond: UInt64(max(delta.diskWriteBytesPerSecond, 0)),
+            diskReadBytesPerSecond: UInt64(saturating: delta.diskReadBytesPerSecond),
+            diskWriteBytesPerSecond: UInt64(saturating: delta.diskWriteBytesPerSecond),
             schedulerJankMs: delta.schedulerJankMs,
             thermal: delta.thermal,
             measuredCPUShare: share
@@ -298,7 +298,7 @@ struct StallEvaluator: Sendable {
                     name: proc.name,
                     attribution: proc.attribution,
                     cpuOneCore: proc.cpuOneCore,
-                    diskBytesPerSecond: UInt64(max(proc.diskBytesPerSecond, 0)),
+                    diskBytesPerSecond: UInt64(saturating: proc.diskBytesPerSecond),
                     footprintBytes: proc.footprintBytes,
                     score: Int(score.rounded()),
                     reason: reason(for: proc, cpuShare: cpuShare)

@@ -35,6 +35,7 @@ enum DeltaCalculator {
         var totalTicks: Double = 0
         var cores = current.cpuTicks.count
         if previous.cpuTicks.count == current.cpuTicks.count {
+            // CPU ticks are 32-bit counters that really do wrap; disk totals never do.
             for (a, b) in zip(previous.cpuTicks, current.cpuTicks) {
                 let du = Double(b.user &- a.user)
                 let ds = Double(b.system &- a.system)
@@ -48,9 +49,9 @@ enum DeltaCalculator {
         }
 
         let swapDelta = Double(current.memory.swapUsed) - Double(previous.memory.swapUsed)
-        let diskRead = Double(current.disk.readBytes &- previous.disk.readBytes) / wall
-        let diskWrite = Double(current.disk.writeBytes &- previous.disk.writeBytes) / wall
-        let busyNs = Double(current.disk.busyNs &- previous.disk.busyNs)
+        let diskRead = Double(counterDelta(current.disk.readBytes, previous.disk.readBytes)) / wall
+        let diskWrite = Double(counterDelta(current.disk.writeBytes, previous.disk.writeBytes)) / wall
+        let busyNs = Double(counterDelta(current.disk.busyNs, previous.disk.busyNs))
         let deviceCount = max(Double(current.disk.deviceCount), 1)
 
         return SystemDelta(
@@ -92,9 +93,32 @@ enum DeltaCalculator {
             return ProcessDelta(
                 pid: proc.pid, name: proc.name, attribution: .measured,
                 cpuOneCore: cpuDelta / denominator,
-                diskBytesPerSecond: Double(readDelta + writeDelta) / max(wall, 0.001),
+                diskBytesPerSecond: (Double(readDelta) + Double(writeDelta)) / max(wall, 0.001),
                 footprintBytes: footprint
             )
+        }
+    }
+
+    /// Device totals drop when the set of attached devices changes, and a probe
+    /// can read zero before it is warm. Treating that as a value close to
+    /// UInt64.max turns one unmounted disk into an exabyte per second, which then
+    /// cannot be converted to UInt64 at all.
+    private static func counterDelta(_ current: UInt64, _ previous: UInt64) -> UInt64 {
+        current >= previous ? current - previous : 0
+    }
+}
+
+extension UInt64 {
+    /// The last boundary before an absurd probe reading reaches the UI.
+    /// Both infinities and NaN mean "not a measurement"; a finite value above
+    /// UInt64.max saturates, because `UInt64(_:)` traps on it.
+    init(saturating rate: Double) {
+        if !rate.isFinite || rate <= 0 {
+            self = 0
+        } else if rate >= Double(UInt64.max) {
+            self = .max
+        } else {
+            self = UInt64(rate)
         }
     }
 }

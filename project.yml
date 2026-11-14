@@ -23,7 +23,7 @@ targets:
         LSUIElement: false
         CFBundleName: Quik
         CFBundleDisplayName: Quik
-        CFBundleShortVersionString: "0.1.1"
+        CFBundleShortVersionString: "0.1.2"
         LSMinimumSystemVersion: "14.0"
     settings:
       base:

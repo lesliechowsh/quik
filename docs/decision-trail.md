@@ -209,3 +209,17 @@
 最终结果。`package.sh` 打印 `gatekeeper: accepted`。`verify-package.sh` 六项 PASS，`spctl` 返回 `source=Notarized Developer ID`。把应用拷出来加上 `com.apple.quarantine` 属性后启动，进程正常起来，没有拦截。版本升到 0.1.1，0.1.0 保持原样。
 
 DMG 已 staple，应用本体没有单独 staple，首次启动由 Gatekeeper 在线核验。离线首启是否会被拦没有验证，这是当前分发的残余风险。
+
+### 崩溃：磁盘累计量回绕与 0.1.2
+
+用户报告应用跑一会就崩溃，不是第一次。五份 `.ips` 签名相同：`EXC_BREAKPOINT`，`Double value cannot be converted to UInt64 because the result would be greater than UInt64.max`，故障帧在 `StallEvaluator.swift:61/62`，也就是系统磁盘读写速率转成 `UInt64` 的那两行。不是进程排行那一行。
+
+原因。磁盘总量来自 IOKit `IOBlockStorageDriver` 的累计字节，代码用 `&-` 求差，把下降当成了回绕。累计量只在设备集合变化时下降。实测挂载一个写入 120 MB 的磁盘映像再卸载，写入总量从 4,725,380,667,136 降到 4,725,260,709,888，设备数从 2 回到 1。回绕后的差值接近 2^64 减去这 120 MB，除以扫描间隔就超过 2^64，`UInt64(_:)` 直接 trap。
+
+间隔会小于 1 秒。用和应用相同的 `DispatchSourceTimer` 与 `Date()` 在这台机器上测 39 个间隔，中位数 0.99996 秒，21 个小于 1 秒，最短 0.99286 秒。所以回绕量除以小于 1 的间隔必然越界，不需要极端抖动。
+
+复现。在修复前的 `HEAD` 单独构建，重复"挂载、写入 100 MB、强制卸载"，第一轮就生成同样的报告，故障帧 `StallEvaluator.swift:62`，二进制路径在 `/private/tmp`。同一循环跑两遍，两遍都崩。
+
+修复。累计量下降按基线重置处理，该区间记 0，不再回绕；磁盘忙碌时间同样处理。进程磁盘差本来就检查了下降，但 `readDelta + writeDelta` 是 `UInt64` 相加，改成先转 `Double` 再加。显示边界换成 `UInt64(saturating:)`，非有限值记 0，超过上界的有限值饱和，边界上不再有 trap。CPU 时间片保留 `&-`，它是真的 32 位回绕，并且只用于比值。
+
+验证。同样的 8 轮挂载、写入、卸载，修复版进程全程存活，没有新的 `.ips`。`DeltaTests` 四条断言：计数下降返回 0、正常增长速率不变、进程计数下降不崩、异常 Double 不崩。第一条在修复前会让测试进程 trap。`ui-check.sh` 与 `verify-experience.sh` 全部 PASS。版本号升到 0.1.2，0.1.1 的安装包保持原样，尚未发布新包。
