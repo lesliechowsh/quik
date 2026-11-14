@@ -1,5 +1,11 @@
 import Foundation
 
+extension Bundle {
+    var shortVersion: String {
+        object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+}
+
 final class MonitorEngine {
     private let queue = DispatchQueue(label: "dev.quik.monitor", qos: .utility)
     private var timer: DispatchSourceTimer?
@@ -17,6 +23,7 @@ final class MonitorEngine {
     private let experience = ExperienceProbe()
 
     var onUpdate: ((StallAssessment, [Int]) -> Void)?
+    var onSnapshot: ((StatusSnapshot) -> Void)?
 
     init(interval: TimeInterval = 1.0) {
         self.interval = interval
@@ -87,6 +94,7 @@ final class MonitorEngine {
         }
         var assessment = evaluator.evaluate(delta: delta, processes: processDeltas, at: snapshot.at)
         assessment = assessment.attaching(AppOwnerResolver.resolve(assessment.culprits.map(\.pid)))
+        onSnapshot?(StatusSnapshot(assessment: assessment, appVersion: Bundle.main.shortVersion))
 
         if ProcessInfo.processInfo.environment["QUIK_DEBUG"] == "1" {
             debugLog(delta: delta, processes: processDeltas, assessment: assessment)

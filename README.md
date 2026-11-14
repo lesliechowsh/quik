@@ -44,6 +44,12 @@ scripts/run.sh
 
 `sample` 报告写到临时目录并自动打开，里面是 3 秒的调用栈，能看出进程卡在哪个函数。这个入口只在高级模式出现。
 
+## AI 助手
+
+装好之后，AI 助手（Claude Code、Cursor 等）也能回答"现在电脑卡不卡"。打开面板，点"安装到 AI 助手"，提示词会自动复制，粘贴给 AI 助手即可。它会把技能文件装进自己的技能目录，并拿到一个 `quik` 命令行工具。
+
+命令行工具随应用分发，在 `Quik.app/Contents/Library/quik`，不需要单独安装。`quik` 输出人类可读摘要，`quik --json` 输出机器可读的 JSON，退出码直接表示状态：0 流畅，1 有点卡，2 卡住了，3 没有数据。应用每秒把评估结果原子写入 `~/Library/Application Support/Quik/status.json`，实测 516 字节；退出时删除，5 秒没更新按过期处理。技能文件教 AI 助手引用现成的中文结论、不要自己再跑 top 或采样。
+
 ## 验证
 
 ```bash
@@ -69,11 +75,14 @@ scripts/verify-quit.sh
 ```bash
 # 安装包闭环：挂载 DMG，检查架构、签名与拖入目标，并启动一次
 scripts/verify-package.sh
+
+# Agent 闭环：状态文件、命令行工具两种输出、过期与退出清理
+scripts/verify-agent.sh
 ```
 
 维护者发版步骤见 `docs/distribution.md`。
 
-`scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做四类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确。任何断言失败会返回非零退出码。
+`scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做五类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确、"安装到 AI 助手"视图渲染且提示词真的进了剪贴板。任何断言失败会返回非零退出码。
 
 窗口位置单独断言，是因为按窗口 ID 截图只证明内容对，不证明它出现在屏幕上。早期版本的面板顶到屏幕外，内容截图完好，检查照样通过。
 
@@ -90,9 +99,11 @@ Quik 测量系统争用，不测量别的 app 的 UI 帧时间。macOS 没有公
 ## 目录
 
 ```
-Sources/Core/       判定引擎、差分、体验探针、历史
+Sources/Core/       判定引擎、差分、体验探针、历史、Agent 状态文件
 Sources/Probe/      mach、sysctl、libproc、IOKit 采样与 C 桥接
 Sources/UI/         菜单栏、面板、动作、预览状态
+Sources/CLI/        quik 命令行工具
+Sources/Resources/  随应用分发的 AI 助手技能文件
 Sources/App/        入口
 Tests/              单元测试
 scripts/            构建、界面检查、度量实验

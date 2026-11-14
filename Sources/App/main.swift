@@ -25,6 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController?.openPanel()
         return false
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        StatusFile.remove()
+    }
 }
 
 mainTrace("main start")

@@ -80,6 +80,16 @@ else
   failed "codesign --verify --deep --strict"
 fi
 
+if [ -x "$APP/Contents/Library/quik" ]; then
+  if "$APP/Contents/Library/quik" --help >/dev/null 2>&1; then
+    pass "bundled quik CLI runs from Contents/Library"
+  else
+    failed "bundled quik CLI did not run"
+  fi
+else
+  failed "DMG is missing Contents/Library/quik"
+fi
+
 GK_OUT="$(spctl -a -vv "$APP" 2>&1)" && GK_OK=1 || GK_OK=0
 if [ "$GK_OK" = 1 ]; then
   pass "spctl accepts the app (notarized)"

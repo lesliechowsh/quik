@@ -44,6 +44,12 @@ Les suspects sont affichés comme l'application, pas comme le nom de l'exécutab
 
 Le rapport `sample` est écrit dans un dossier temporaire et ouvert automatiquement. Il contient 3 secondes de piles d'appels et montre la fonction dans laquelle le processus est bloqué. Cette entrée n'apparaît qu'en mode avancé.
 
+## Assistant IA
+
+Une fois l'installation faite, un assistant IA (Claude Code, Cursor, etc.) peut aussi répondre à « est-ce que la machine bloque maintenant ». Ouvrez le panneau, cliquez sur « 安装到 AI 助手 » (installer pour l'assistant IA) : le prompt est copié automatiquement, collez-le dans votre assistant. Il installe le fichier de compétence dans son propre répertoire et reçoit un outil en ligne de commande `quik`.
+
+L'outil en ligne de commande est livré dans l'application, en `Quik.app/Contents/Library/quik`, sans installation séparée. `quik` affiche un résumé lisible, `quik --json` un JSON exploitable par une machine, et le code de sortie donne le verdict : 0 fluide, 1 ralenti, 2 bloqué, 3 pas de données. Chaque seconde, l'application réécrit atomiquement `~/Library/Application Support/Quik/status.json`, mesuré à 516 octets ; le fichier est supprimé à la fermeture, et des données de plus de 5 secondes comptent comme périmées. Le fichier de compétence apprend à l'assistant à citer le résumé tout fait et à ne pas relancer top ni un échantillonnage de son côté.
+
 ## Vérification
 
 ```bash
@@ -69,11 +75,14 @@ scripts/verify-quit.sh
 ```bash
 # Boucle du paquet : monte le DMG, vérifie les architectures, la signature et la cible du glisser-déposer, puis le lance une fois
 scripts/verify-package.sh
+
+# Boucle de l'agent : fichier d'état, les deux sorties du CLI, péremption et nettoyage à la fermeture
+scripts/verify-agent.sh
 ```
 
 Les étapes de publication sont dans `docs/distribution.md`.
 
-`scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie quatre choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, et le rendu correct des deux modes. Toute assertion en échec renvoie un code de sortie non nul.
+`scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie cinq choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, le rendu correct des deux modes, et la vue « 安装到 AI 助手 » affichée avec le prompt réellement copié dans le presse-papiers. Toute assertion en échec renvoie un code de sortie non nul.
 
 La position de la fenêtre est vérifiée séparément, car une capture par identifiant de fenêtre prouve que le contenu est bon, pas que la fenêtre est à l'écran. Une première version plaçait le panneau au-dessus du haut de l'écran ; la capture du contenu était parfaite et le contrôle passait quand même.
 
@@ -90,9 +99,11 @@ La correspondance complète entre charge et état, ainsi que la base de la courb
 ## Arborescence
 
 ```
-Sources/Core/       moteur de décision, deltas, sonde d'expérience, historique
+Sources/Core/       moteur de décision, deltas, sonde d'expérience, historique, fichier d'état agent
 Sources/Probe/      échantillonnage mach, sysctl, libproc, IOKit et pont C
 Sources/UI/         barre des menus, panneau, actions, états de prévisualisation
+Sources/CLI/        outil en ligne de commande quik
+Sources/Resources/  fichier de compétence pour assistant IA livré avec l'app
 Sources/App/        point d'entrée
 Tests/              tests unitaires
 scripts/            compilation, contrôles d'interface, expériences de mesure

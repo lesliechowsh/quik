@@ -7,10 +7,19 @@ struct PanelView: View {
     var onActivityMonitor: () -> Void
     var onToggleHUD: () -> Void
     var onToggleAdvanced: () -> Void
+    @State private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] == "1"
 
     private var assessment: StallAssessment { store.assessment }
 
     var body: some View {
+        if showingAgentInstall {
+            AgentInstallView(onBack: { showingAgentInstall = false })
+        } else {
+            mainPanel
+        }
+    }
+
+    private var mainPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             if store.advanced {
@@ -63,29 +72,7 @@ struct PanelView: View {
     }
 
     private var summary: String {
-        if assessment.level == .fluid {
-            return "现在用起来是流畅的，不需要做什么。"
-        }
-        var parts: [String] = []
-        if let cause = assessment.stableCause {
-            parts.append(plainCause(cause))
-        } else {
-            parts.append("刚才的资源争用让系统还没缓过来。")
-        }
-        if let culprit = assessment.headlineCulprit {
-            parts.append("占用资源最多的是「\(culprit.displayName)」。")
-        }
-        return parts.joined()
-    }
-
-    private func plainCause(_ kind: CauseKind) -> String {
-        switch kind {
-        case .cpu: return "CPU 被占满了，系统来不及处理你的操作。"
-        case .memory: return "内存不够用了，系统一直在腾地方。"
-        case .disk: return "硬盘太忙了，读写都要排队。"
-        case .scheduling: return "系统响应变慢了，点下去要等一会儿才有反应。"
-        case .thermal: return "机器太热了，性能被压下来了。"
-        }
+        assessment.plainSummary
     }
 
     private var calmState: some View {
@@ -176,6 +163,11 @@ struct PanelView: View {
                 Button(store.hudVisible ? "隐藏悬浮窗" : "显示悬浮窗", action: onToggleHUD)
                     .buttonStyle(.link)
                     .font(.caption)
+                if !store.advanced {
+                    Button("安装到 AI 助手") { showingAgentInstall = true }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
                 Button(store.advanced ? "普通模式" : "高级模式", action: onToggleAdvanced)
                 .buttonStyle(.link)
                 .font(.caption)

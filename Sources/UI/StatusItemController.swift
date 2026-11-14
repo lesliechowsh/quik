@@ -57,6 +57,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             }
             self.updateTitle(assessment)
         }
+        engine.onSnapshot = { StatusFile.write($0) }
         trace("init complete preview=\(preview ?? "nil") button=\(item.button != nil)")
         if ProcessInfo.processInfo.environment["QUIK_NO_HUD"] != "1" {
             let hud = HUDController(

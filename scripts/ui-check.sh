@@ -86,6 +86,52 @@ check_state stalled "卡住了" "内存不够用了" "Slack" "页面渲染" "结
 defaults write "$BUNDLE_ID" advancedMode -bool true
 check_state stalled "内存严重不足" "31% CPU" "先处理这个" "卡住了" "卡住了"
 
+check_agent_install() {
+  pkill -x Quik 2>/dev/null || true
+  # The entry lives in plain mode, so exercise the path a real user takes.
+  defaults write "$BUNDLE_ID" advancedMode -bool false
+  defaults write "$BUNDLE_ID" hudVisible -bool true
+  rm -f /tmp/quik-panel-windowid.txt
+  printf 'quik-ui-check-sentinel' | pbcopy
+  open -n --env QUIK_PREVIEW=fluid --env QUIK_PREVIEW_AGENT=1 "$APP"
+  for _ in $(seq 1 100); do
+    [ -f /tmp/quik-panel-windowid.txt ] && break
+    perl -e 'select(undef,undef,undef,0.1)'
+  done
+  if [ ! -f /tmp/quik-panel-windowid.txt ]; then
+    echo "FAIL agent install: panel window not recorded"
+    fail=1
+    pkill -x Quik 2>/dev/null || true
+    return
+  fi
+  # The popover settles into its pinned position for a moment before all text lands.
+  perl -e 'select(undef,undef,undef,1.5)'
+  local window_id
+  window_id="$(cat /tmp/quik-panel-windowid.txt)"
+  screencapture -x -l "$window_id" -o "$OUT/agent.png"
+  swift scripts/ocr.swift "$OUT/agent.png" > "$OUT/agent.txt" 2>/dev/null || true
+  local text_norm
+  text_norm="$(tr -d ' ()（）' < "$OUT/agent.txt")"
+  local missing=0
+  for needle in "让AI助手帮你盯着电脑" "已复制" "返回"; do
+    if ! grep -qF "$(tr -d ' ()（）' <<< "$needle")" <<< "$text_norm"; then
+      echo "FAIL agent install: missing '$needle'"
+      missing=1
+      fail=1
+    fi
+  done
+  if pbpaste | grep -q "name: quik" && pbpaste | grep -q "Contents/Library/quik"; then
+    echo "PASS agent install (view renders, prompt copied with frontmatter and cli path)"
+  else
+    echo "FAIL agent install: clipboard does not hold the prompt"
+    missing=1
+    fail=1
+  fi
+  pkill -x Quik 2>/dev/null || true
+}
+
+check_agent_install
+
 pkill -x Quik 2>/dev/null || true
 sleep 1
 defaults write "$BUNDLE_ID" advancedMode -bool false

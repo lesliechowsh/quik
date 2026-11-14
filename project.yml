@@ -11,25 +11,52 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_DEBUG_DYLIB: NO
 targets:
   Quik:
     type: application
     platform: macOS
     sources:
       - path: Sources
+        excludes:
+          - "CLI"
+      - path: Sources/Resources
+        buildPhase: resources
+    dependencies:
+      # The CLI shares no code path with the app binary; a target dependency
+      # is enough to build it first. Do not embed it: Contents/MacOS/quik is
+      # the same path as the app executable on a case-insensitive volume.
+      - target: QuikCLI
+    postBuildScripts:
+      - name: Embed quik CLI
+        script: |
+          set -euo pipefail
+          mkdir -p "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library"
+          cp "${BUILT_PRODUCTS_DIR}/quik" "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/quik"
+        basedOnDependencyAnalysis: false
     info:
       path: Sources/App/Info.plist
       properties:
         LSUIElement: false
         CFBundleName: Quik
         CFBundleDisplayName: Quik
-        CFBundleShortVersionString: "0.1.2"
+        CFBundleShortVersionString: "0.2.0"
         LSMinimumSystemVersion: "14.0"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.quik.app
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Probe/CShim/Quik-Bridging-Header.h
         OTHER_LDFLAGS: "-lproc"
+  QuikCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/Core/StallAssessment.swift
+      - path: Sources/Core/StatusSnapshot.swift
+      - path: Sources/CLI/main.swift
+    settings:
+      base:
+        PRODUCT_NAME: quik
   QuikTests:
     type: bundle.unit-test
     platform: macOS

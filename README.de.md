@@ -44,6 +44,12 @@ Verdächtige erscheinen als App, nicht als Name der ausführbaren Datei. `Slack 
 
 Der `sample`-Bericht wird in ein temporäres Verzeichnis geschrieben und automatisch geöffnet. Er enthält 3 Sekunden Aufrufstapel und zeigt, in welcher Funktion der Prozess hängt. Dieser Eintrag erscheint nur im erweiterten Modus.
 
+## KI-Assistent
+
+Nach der Installation kann auch ein KI-Assistent (Claude Code, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten. Panel öffnen, auf „安装到 AI 助手“ (für den KI-Assistenten installieren) klicken, der Prompt wird automatisch kopiert und lässt sich in den Assistenten einfügen. Er installiert die Skill-Datei in sein eigenes Skill-Verzeichnis und bekommt ein `quik`-Kommandozeilenwerkzeug.
+
+Das Werkzeug liegt innerhalb der App unter `Quik.app/Contents/Library/quik` und braucht keine separate Installation. `quik` gibt eine lesbare Zusammenfassung aus, `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren.
+
 ## Prüfung
 
 ```bash
@@ -69,11 +75,14 @@ scripts/verify-quit.sh
 ```bash
 # Paket-Schleife: hängt das DMG ein, prüft Architekturen, Signatur und das Ziel und startet es einmal
 scripts/verify-package.sh
+
+# Agenten-Schleife: Statusdatei, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
+scripts/verify-agent.sh
 ```
 
 Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
 
-`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft vier Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel und die korrekte Darstellung beider Modi. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
+`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „安装到 AI 助手“ mit dem Prompt wirklich im Clipboard. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.
 
@@ -90,9 +99,11 @@ Die vollständige Abbildung von Last auf Zustand und die Grundlage der Entscheid
 ## Aufbau
 
 ```
-Sources/Core/       Entscheidungsengine, Deltas, Erfahrungssonde, Verlauf
+Sources/Core/       Entscheidungsengine, Deltas, Erfahrungssonde, Verlauf, Agenten-Statusdatei
 Sources/Probe/      mach-, sysctl-, libproc-, IOKit-Sampling und C-Brücke
 Sources/UI/         Menüleiste, Panel, Aktionen, Vorschauzustände
+Sources/CLI/        Kommandozeilenwerkzeug quik
+Sources/Resources/  mit der App ausgelieferte Skill-Datei für KI-Assistenten
 Sources/App/        Einstiegspunkt
 Tests/              Unit-Tests
 scripts/            Build, UI-Prüfungen, Messexperimente

@@ -227,3 +227,21 @@ DMG 已 staple，应用本体没有单独 staple，首次启动由 Gatekeeper �
 发布。公证提交 `23d5924c`，Accepted，staple 通过，`gatekeeper: accepted`。`verify-package.sh` 七项 PASS，`spctl` 返回 `source=Notarized Developer ID`。下载回来的 DMG 校验和与 `SHA256SUMS` 一致。
 
 推送时 `--tags` 把只该留在本地的 `local-history-2026-11-15` 一起推到了远端。这个标签指向公开前的旧历史，发现后立刻删除远端标签，`ls-remote` 已确认不在列表里。它公开存在了几十秒，之后只能靠知道 SHA 访问。
+
+### Agent 数据面：skill 加 CLI 与一键安装
+
+用户想让 AI 助手也能回答"现在卡不卡"，安装入口放在界面上，点一下把提示词交给 AI 助手去装。
+
+先定数据形状。`StatusSnapshot` 是应用与外部之间的契约：schema 版本、ISO 8601 时间戳、level（fluid/sluggish/stalled）、score、现成的中文结论 `summary`、按贡献排序的原因、按占用排序的嫌疑进程（含 pid、应用名、分工、折算核数、磁盘 MB/s、内存 MB）。普通面板的中文句子原来只写在 `PanelView` 里，现在移进 `StallAssessment.plainSummary`，面板、悬浮窗、状态文件读同一份，避免两处句子各自漂移。
+
+架构上比过两个候选。候选 A：应用每秒把评估结果原子写入状态文件，CLI 只读文件。候选 B：CLI 自带探针，独立采样两秒再报数。B 被否决，因为它造出第二条"评估系统状态"的路径，和菜单栏里用户看到的结论可能不一致，而且每次调用要多烧一两秒 CPU。A 的代价是依赖应用常驻，但 Quik 本来就是常驻监控，应用没跑就没有"现在"可言，CLI 按约定报退出码 3。
+
+落地时踩到一个真问题：CLI 最初嵌在 `Contents/MacOS/quik`，在这台大小写不敏感的 APFS 上，这个路径和应用主程序 `Quik` 是同一个文件，嵌入时把主程序覆盖了，`open` 启动的其实是 CLI。改成 `Contents/Library/quik`，用 target 依赖保证先构建，再用脚本阶段拷进去，绕开 Copy Files 没有 Library 目标的限制。
+
+CLI 放弃 PATH 安装作为必选步骤。技能文件里写的是应用内的绝对路径，装完就能用；软链到 `/usr/local/bin` 只是提示词里的可选步骤。少一个失败点。
+
+界面入口按普通模式优先：只有普通模式的面板底部的"安装到 AI 助手"。点开是安装视图，出现时就把提示词放进剪贴板，按钮变成"已复制，去粘贴给 AI 助手"。提示词内嵌完整的技能文件内容并替换好路径占位符，AI 助手照着写文件即可，不需要它自己找路径。
+
+验证。`DeltaTests` 之外新增 `StatusSnapshotTests` 五条：契约字段、过期判定、流句一致性、状态文件读写往返、提示词携带技能正文与真实路径。`scripts/verify-agent.sh` 八项断言：CLI 在包内、无文件退出码 3、应用每秒写文件、JSON 字段齐全、文本模式、快照新鲜、优雅退出后退出码 3 且文件被删。`ui-check.sh` 加第五类断言：安装视图渲染、OCR 可读、剪贴板里真的是提示词。打包验证加了一条包内 CLI 可运行。全部 PASS。
+
+成本记在 `docs/metric-validation.md`：状态文件实测 516 字节、每秒一次原子重写；CLI 稳定后单次 0.02 秒，首次 0.66 秒，差异归因于系统对首次执行新二进制的检查（推断）。

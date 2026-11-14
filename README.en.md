@@ -44,6 +44,12 @@ Suspects are shown as the app, not the executable name. `Slack Helper (Renderer)
 
 The `sample` report is written to a temporary directory and opened automatically. It holds 3 seconds of call stacks and shows which function the process is stuck in. This entry appears only in advanced mode.
 
+## AI assistant
+
+Once installed, an AI assistant (Claude Code, Cursor, and others) can also answer "is the machine stalled right now". Open the panel, click "安装到 AI 助手" (install for the AI assistant), and the prompt is copied automatically; paste it into your assistant. It installs the skill file into its own skill directory and receives a `quik` command-line tool.
+
+The command-line tool ships inside the app at `Quik.app/Contents/Library/quik` and needs no separate install. `quik` prints a human-readable summary, `quik --json` prints machine-readable JSON, and the exit code states the verdict: 0 fluid, 1 sluggish, 2 stalled, 3 no data. Every second the app atomically rewrites `~/Library/Application Support/Quik/status.json`, measured at 516 bytes; it is removed on quit, and data older than 5 seconds counts as stale. The skill file teaches the assistant to quote the ready-made summary and not to run top or sampling on its own.
+
 ## Verification
 
 ```bash
@@ -69,11 +75,14 @@ scripts/verify-quit.sh
 ```bash
 # Package loop: mounts the DMG, checks architectures, signing, and the drag target, then launches it once
 scripts/verify-package.sh
+
+# Agent loop: status file, both CLI outputs, staleness, and cleanup on quit
+scripts/verify-agent.sh
 ```
 
 Maintainer release steps are in `docs/distribution.md`.
 
-`scripts/ui-check.sh` writes screenshots and OCR text to `/tmp/quik-ui`. It asserts four things: the panel text, the window rectangles of the panel and the floating window staying on screen, the Dock icon text staying inside the tile, and both modes rendering correctly. Any failed assertion returns a non-zero exit code.
+`scripts/ui-check.sh` writes screenshots and OCR text to `/tmp/quik-ui`. It asserts five things: the panel text, the window rectangles of the panel and the floating window staying on screen, the Dock icon text staying inside the tile, both modes rendering correctly, and the "安装到 AI 助手" view rendering with the prompt actually reaching the clipboard. Any failed assertion returns a non-zero exit code.
 
 Window position is asserted separately because a screenshot by window ID proves the content is right, not that the window is on screen. An early version put the panel above the top of the screen; its content screenshot looked fine and the check still passed.
 
@@ -90,9 +99,11 @@ The full load-to-state mapping and the basis for the decision curve are in `docs
 ## Layout
 
 ```
-Sources/Core/       decision engine, deltas, experience probe, history
+Sources/Core/       decision engine, deltas, experience probe, history, agent status file
 Sources/Probe/      mach, sysctl, libproc, IOKit sampling and the C bridge
 Sources/UI/         menu bar, panel, actions, preview states
+Sources/CLI/        the quik command-line tool
+Sources/Resources/  the AI-assistant skill file shipped with the app
 Sources/App/        entry point
 Tests/              unit tests
 scripts/            build, UI checks, measurement experiments
