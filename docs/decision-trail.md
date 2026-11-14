@@ -222,4 +222,8 @@ DMG 已 staple，应用本体没有单独 staple，首次启动由 Gatekeeper �
 
 修复。累计量下降按基线重置处理，该区间记 0，不再回绕；磁盘忙碌时间同样处理。进程磁盘差本来就检查了下降，但 `readDelta + writeDelta` 是 `UInt64` 相加，改成先转 `Double` 再加。显示边界换成 `UInt64(saturating:)`，非有限值记 0，超过上界的有限值饱和，边界上不再有 trap。CPU 时间片保留 `&-`，它是真的 32 位回绕，并且只用于比值。
 
-验证。同样的 8 轮挂载、写入、卸载，修复版进程全程存活，没有新的 `.ips`。`DeltaTests` 四条断言：计数下降返回 0、正常增长速率不变、进程计数下降不崩、异常 Double 不崩。第一条在修复前会让测试进程 trap。`ui-check.sh` 与 `verify-experience.sh` 全部 PASS。版本号升到 0.1.2，0.1.1 的安装包保持原样，尚未发布新包。
+验证。同样的 8 轮挂载、写入、卸载，修复版进程全程存活，没有新的 `.ips`。`DeltaTests` 四条断言：计数下降返回 0、正常增长速率不变、进程计数下降不崩、异常 Double 不崩。第一条在修复前会让测试进程 trap。`ui-check.sh` 与 `verify-experience.sh` 全部 PASS。版本号升到 0.1.2，0.1.1 的安装包保持原样。
+
+发布。公证提交 `23d5924c`，Accepted，staple 通过，`gatekeeper: accepted`。`verify-package.sh` 七项 PASS，`spctl` 返回 `source=Notarized Developer ID`。下载回来的 DMG 校验和与 `SHA256SUMS` 一致。
+
+推送时 `--tags` 把只该留在本地的 `local-history-2026-11-15` 一起推到了远端。这个标签指向公开前的旧历史，发现后立刻删除远端标签，`ls-remote` 已确认不在列表里。它公开存在了几十秒，之后只能靠知道 SHA 访问。
