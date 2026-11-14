@@ -1,5 +1,7 @@
 # Quik
 
+[中文](README.md) · [English](README.en.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [日本語](README.ja.md)
+
 一个常驻菜单栏的 macOS 卡顿监控工具。它回答两个问题：现在卡不卡，是谁导致的。
 
 原生 Swift，无第三方依赖。稳态开销实测 0.8% 单核（12 核折合 0.07%），常驻内存约 25 MB。测量方法见 `docs/metric-validation.md`。
