@@ -71,6 +71,8 @@ scripts/verify-quit.sh
 scripts/verify-package.sh
 ```
 
+Maintainer release steps are in `docs/distribution.md`.
+
 `scripts/ui-check.sh` writes screenshots and OCR text to `/tmp/quik-ui`. It asserts four things: the panel text, the window rectangles of the panel and the floating window staying on screen, the Dock icon text staying inside the tile, and both modes rendering correctly. Any failed assertion returns a non-zero exit code.
 
 Window position is asserted separately because a screenshot by window ID proves the content is right, not that the window is on screen. An early version put the panel above the top of the screen; its content screenshot looked fine and the check still passed.

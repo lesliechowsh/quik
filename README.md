@@ -71,6 +71,8 @@ scripts/verify-quit.sh
 scripts/verify-package.sh
 ```
 
+维护者发版步骤见 `docs/distribution.md`。
+
 `scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做四类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确。任何断言失败会返回非零退出码。
 
 窗口位置单独断言，是因为按窗口 ID 截图只证明内容对，不证明它出现在屏幕上。早期版本的面板顶到屏幕外，内容截图完好，检查照样通过。

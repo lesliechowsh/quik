@@ -1,0 +1,92 @@
+# 分发与发版
+
+## 当前渠道
+
+macOS 店外分发。Developer ID 签名，Apple 公证，DMG 拖进 Applications。没有使用 App Store。
+
+## 机器上已有的东西
+
+签名身份在登录钥匙串，不要写死名字，用命令取：
+
+```bash
+IDENTITY="$(security find-identity -v -p codesigning \
+  | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+echo "$IDENTITY"
+```
+
+公证凭据存在钥匙串，profile 名是 `quik-notary`。验证：
+
+```bash
+xcrun notarytool history --keychain-profile quik-notary
+```
+
+## 发版
+
+1. 改版本号，`project.yml` 与 `Sources/App/Info.plist` 两处都要改。
+2. 打包并公证：
+
+```bash
+QUIK_SIGN_IDENTITY="$IDENTITY" QUIK_NOTARY_PROFILE=quik-notary scripts/package.sh
+```
+
+3. 验证产物：
+
+```bash
+scripts/verify-package.sh
+```
+
+4. 提交并发布：
+
+```bash
+git tag -a vX.Y.Z -m "Quik X.Y.Z"
+git push origin main --tags
+gh release create vX.Y.Z \
+  build/package/Quik-X.Y.Z.dmg \
+  build/package/Quik-X.Y.Z.zip \
+  build/package/SHA256SUMS \
+  --title "Quik X.Y.Z" --notes-file /tmp/quik-release-notes.md
+```
+
+5. 回下载核对：
+
+```bash
+curl -sL -o /tmp/quik.dmg https://github.com/lesliechowsh/quik/releases/download/vX.Y.Z/Quik-X.Y.Z.dmg
+shasum -a 256 /tmp/quik.dmg
+grep 'Quik-X.Y.Z.dmg' build/package/SHA256SUMS
+```
+
+公开 Release 之前先和人确认版本号与发布说明。
+
+## 凭据重建
+
+证书：钥匙串访问的“证书助理”生成 CSR，在 developer.apple.com 的 Certificates 里创建 Developer ID Application，上传 CSR，下载 `.cer` 后双击导入。
+
+公证 profile：
+
+```bash
+xcrun notarytool store-credentials quik-notary \
+  --apple-id <AppleID> --team-id <TeamID>
+```
+
+`<TeamID>` 从证书的 `OU` 字段读：
+
+```bash
+security find-certificate -c "Developer ID Application" -p \
+  | openssl x509 -noout -subject
+```
+
+## 新 agent 能自己做到哪一步
+
+能自己发现并完成：证书身份、打包、签名、公证、staple、产物校验、生成发布资产、如果 `gh` 已登录则创建 Release。
+
+必须问人：Apple ID 密码与双重认证、App 专用密码、App Store Connect 的协议与税务信息、商品页文案与截图、隐私政策、定价、审核提交。这些不进仓库，也不该进对话。
+
+## App Store 的边界
+
+Quik 不能直接上 Mac App Store。它用 `libproc`、IOKit 和 `sample` 读全系统进程，App Sandbox 会挡住这些能力。要上架需要重写核心采集并接受审核。
+
+普通应用或游戏如果准备上架，从第一天开 App Sandbox，使用 Apple Distribution 证书，在 App Store Connect 建应用记录。iPhone 和 iPad 只能走 App Store，测试用 TestFlight。
+
+## 身份规则
+
+只用个人团队。公司团队永久排除，签名、公证、发布都不要用它。仓库、Release 和文档里不写公司名称。

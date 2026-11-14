@@ -71,6 +71,8 @@ scripts/verify-quit.sh
 scripts/verify-package.sh
 ```
 
+Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
+
 `scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft vier Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel und die korrekte Darstellung beider Modi. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.

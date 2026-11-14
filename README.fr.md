@@ -71,6 +71,8 @@ scripts/verify-quit.sh
 scripts/verify-package.sh
 ```
 
+Les étapes de publication sont dans `docs/distribution.md`.
+
 `scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie quatre choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, et le rendu correct des deux modes. Toute assertion en échec renvoie un code de sortie non nul.
 
 La position de la fenêtre est vérifiée séparément, car une capture par identifiant de fenêtre prouve que le contenu est bon, pas que la fenêtre est à l'écran. Une première version plaçait le panneau au-dessus du haut de l'écran ; la capture du contenu était parfaite et le contrôle passait quand même.
