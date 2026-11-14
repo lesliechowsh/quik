@@ -6,6 +6,14 @@ Un moniteur de blocages macOS qui vit dans la barre des menus. Il répond à deu
 
 Swift natif, aucune dépendance tierce. Le coût mesuré en régime stable est de 0,8 % d'un cœur (0,07 % de 12 cœurs), pour environ 25 Mo de mémoire résidente. La méthode se trouve dans `docs/metric-validation.md`. L'interface de l'application est actuellement en chinois.
 
+## Installation
+
+Téléchargez `Quik-<version>.dmg` depuis [Releases](https://github.com/lesliechowsh/quik/releases/latest), ouvrez-le, puis glissez Quik dans Applications. Nécessite macOS 14 ou ultérieur, sur Apple Silicon et Intel.
+
+Au premier lancement, macOS signale que le développeur ne peut pas être vérifié, car cette version communautaire n'est pas notariée. Ouvrez Réglages Système > Confidentialité et sécurité, faites défiler jusqu'à la section Sécurité et cliquez sur « Ouvrir quand même », puis confirmez. Sur macOS 14, un clic droit sur Quik puis « Ouvrir » suffit. Les lancements suivants ne demandent plus rien.
+
+Pour supprimer cette étape, il faut un certificat Developer ID du programme Apple Developer et une notarisation. Une fois le certificat disponible, le mainteneur lance `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` pour produire un paquet sans avertissement.
+
 ## Compilation et exécution
 
 Nécessite Xcode 26 et `xcodegen`.
@@ -56,6 +64,11 @@ scripts/verify-hud.sh
 
 # Boucle de l'action quitter : envoie un signal à un vrai processus et vérifie qu'il s'arrête
 scripts/verify-quit.sh
+```
+
+```bash
+# Boucle du paquet : monte le DMG, vérifie les architectures, la signature et la cible du glisser-déposer, puis le lance une fois
+scripts/verify-package.sh
 ```
 
 `scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie quatre choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, et le rendu correct des deux modes. Toute assertion en échec renvoie un code de sortie non nul.

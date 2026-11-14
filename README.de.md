@@ -6,6 +6,14 @@ Ein Stockungsmonitor für macOS, der in der Menüleiste lebt. Er beantwortet zwe
 
 Natives Swift, keine Fremdbibliotheken. Gemessene Kosten im eingeschwungenen Zustand: 0,8 % eines Kerns (0,07 % von 12 Kernen) bei etwa 25 MB residentem Speicher. Die Methode steht in `docs/metric-validation.md`. Die Oberfläche der App ist derzeit auf Chinesisch.
 
+## Installation
+
+Lade `Quik-<version>.dmg` von [Releases](https://github.com/lesliechowsh/quik/releases/latest) herunter, öffne das Image und ziehe Quik in den Ordner Programme. Benötigt macOS 14 oder neuer, auf Apple Silicon und Intel.
+
+Beim ersten Start meldet macOS, dass der Entwickler nicht überprüft werden kann, weil dieser Community-Build nicht notarisiert ist. Öffne Systemeinstellungen > Datenschutz & Sicherheit, scrolle zum Abschnitt Sicherheit und klicke auf „Dennoch öffnen“, dann bestätige. Unter macOS 14 genügt ein Rechtsklick auf Quik und „Öffnen“. Danach fragt macOS nicht mehr.
+
+Um diesen Schritt zu entfernen, braucht es ein Developer-ID-Zertifikat aus dem Apple Developer Program und eine Notarisierung. Sobald es vorliegt, erzeugt der Maintainer mit `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` ein Paket ohne Warnung.
+
 ## Bauen und starten
 
 Benötigt Xcode 26 und `xcodegen`.
@@ -56,6 +64,11 @@ scripts/verify-hud.sh
 
 # Beenden-Schleife: signalisiert einen echten Prozess und prüft, dass er endet
 scripts/verify-quit.sh
+```
+
+```bash
+# Paket-Schleife: hängt das DMG ein, prüft Architekturen, Signatur und das Ziel und startet es einmal
+scripts/verify-package.sh
 ```
 
 `scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft vier Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel und die korrekte Darstellung beider Modi. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.

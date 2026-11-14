@@ -6,6 +6,14 @@ A macOS stall monitor that lives in the menu bar. It answers two questions: is t
 
 Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of one core (0.07% of 12 cores), with about 25 MB resident. The method is in `docs/metric-validation.md`. The app interface is currently in Chinese.
 
+## Install
+
+Download `Quik-<version>.dmg` from [Releases](https://github.com/lesliechowsh/quik/releases/latest), open it, and drag Quik into Applications. Requires macOS 14 or later, on Apple Silicon and Intel.
+
+The first launch warns that the developer cannot be verified, because this community build is not notarized. Open System Settings > Privacy & Security, scroll to the Security section, click "Open Anyway", and confirm. On macOS 14, Control-click Quik and choose Open instead. Later launches do not ask.
+
+Removing that step requires a Developer ID certificate from the Apple Developer Program and notarization. With one in place, the maintainer runs `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` to produce a warning-free package.
+
 ## Build and run
 
 Requires Xcode 26 and `xcodegen`.
@@ -56,6 +64,11 @@ scripts/verify-hud.sh
 
 # Quit action loop: signals a real process and checks that it exits
 scripts/verify-quit.sh
+```
+
+```bash
+# Package loop: mounts the DMG, checks architectures, signing, and the drag target, then launches it once
+scripts/verify-package.sh
 ```
 
 `scripts/ui-check.sh` writes screenshots and OCR text to `/tmp/quik-ui`. It asserts four things: the panel text, the window rectangles of the panel and the floating window staying on screen, the Dock icon text staying inside the tile, and both modes rendering correctly. Any failed assertion returns a non-zero exit code.

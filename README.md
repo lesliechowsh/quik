@@ -6,7 +6,15 @@
 
 原生 Swift，无第三方依赖。稳态开销实测 0.8% 单核（12 核折合 0.07%），常驻内存约 25 MB。测量方法见 `docs/metric-validation.md`。
 
-## 构建与运行
+## 安装
+
+从 [Releases](https://github.com/lesliechowsh/quik/releases/latest) 下载 `Quik-<版本>.dmg`，打开后把 Quik 拖进 Applications。需要 macOS 14 或更高版本，Apple Silicon 和 Intel 都支持。
+
+首次打开会提示无法验证开发者，因为这个社区构建没有做公证。打开"系统设置 > 隐私与安全性"，在"安全性"一栏点"仍要打开"，再确认一次。macOS 14 上可以右键 Quik 选"打开"。之后不再提示。
+
+要去掉这一步，需要 Apple Developer Program 的 Developer ID 证书并做公证。证书就绪后，维护者运行 `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` 就能产出无提示的安装包。
+
+## 从源码构建
 
 需要 Xcode 26 与 `xcodegen`。
 
@@ -56,6 +64,11 @@ scripts/verify-hud.sh
 
 # 结束动作闭环：对一个真实进程发信号，验证它确实退出
 scripts/verify-quit.sh
+```
+
+```bash
+# 安装包闭环：挂载 DMG，检查架构、签名与拖入目标，并启动一次
+scripts/verify-package.sh
 ```
 
 `scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做四类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确。任何断言失败会返回非零退出码。

@@ -183,3 +183,17 @@
 复核时用同样的像素检查看图，发现一个断言抓不到的缺陷：分数到 100 时渲染成"1…"。原因是 `minimumScaleFactor` 有下限 0.8，三位数需要的缩放低于下限，SwiftUI 直接截断。改成按位数选字号，两位数 70 点、三位数 52 点，并用 `fixedSize()` 禁止截断。三位数的偏移单独调到 -11，使间隙与两位数同样是 28 像素。`DockIconRenderTests` 增加一条 Vision 识别断言，截断会直接让测试失败。
 
 三位数用 52 点比两位数小一截，这是代价。保持 70 点需要图标一半以上的宽度，圆润粗体数字 0.65 em 宽，128 点画布放不下三个。100 分是罕见状态，优先保证完整和不出界。
+
+### 安装与分发
+
+用户要求安装尽量傻瓜化，不要让用户自己重新打包。
+
+先量约束。`security find-identity -v -p codesigning` 返回 0 个证书，`spctl -a` 对现有构建直接 rejected，原因是 ad-hoc 签名。macOS 15.1 起右键打开也不再能绕过 Gatekeeper，只剩系统设置里的"仍要打开"。所以没有 Apple Developer Program 的 Developer ID 证书，就做不到真正零提示的首次启动。
+
+能做到的部分交给两个脚本。`scripts/package.sh` 构建 arm64 + x86_64 的通用 Release，产出 DMG，里面是 Quik.app、Applications 软链和一份中英安装说明。`scripts/verify-package.sh` 挂载 DMG，检查应用、软链、bundle id、两种架构、签名，再从 DMG 拷贝到临时目录启动一次。
+
+签名路径已经留好。设置 `QUIK_SIGN_IDENTITY` 后改用 Developer ID 签名，开启 hardened runtime 和时间戳；再设置 `QUIK_NOTARY_PROFILE` 会签名 DMG、提交公证并 staple。两个变量缺一个时脚本直接失败，不会产出看起来像公证过的包。
+
+验证结果。`package.sh` 输出 `architectures: x86_64 arm64`，DMG 904 KB，`spctl` 仍然 rejected，符合预期。`verify-package.sh` 的五项断言全部 PASS，`spctl` 一条 WARN，打包后的应用成功启动并退出。`SHA256SUMS` 用 `shasum -c` 复核通过。
+
+残余代价写进了五种语言的 README 和 DMG 里的说明文件。首次打开要去系统设置点一次"仍要打开"。这是没有证书时的上限。

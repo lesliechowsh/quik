@@ -6,6 +6,14 @@
 
 ネイティブ Swift で、外部依存はありません。定常状態の実測コストは 1 コアの 0.8%（12 コア換算で 0.07%）、常駐メモリは約 25 MB です。測定方法は `docs/metric-validation.md` にあります。アプリの表示言語は現在中国語です。
 
+## インストール
+
+[Releases](https://github.com/lesliechowsh/quik/releases/latest) から `Quik-<version>.dmg` をダウンロードし、開いて Quik を Applications にドラッグします。macOS 14 以降が必要で、Apple Silicon と Intel の両方に対応します。
+
+初回起動時に開発者を確認できない旨の警告が出ます。このコミュニティビルドは公証されていないためです。「システム設定 > プライバシーとセキュリティ」を開き、「セキュリティ」欄の「このまま開く」をクリックして確認します。macOS 14 では Quik を右クリックして「開く」で構いません。次回以降は表示されません。
+
+この手順をなくすには Apple Developer Program の Developer ID 証明書と公証が必要です。証明書が用意できたら、メンテナは `QUIK_SIGN_IDENTITY=... QUIK_NOTARY_PROFILE=... scripts/package.sh` を実行すると警告の出ないパッケージを作れます。
+
 ## ビルドと実行
 
 Xcode 26 と `xcodegen` が必要です。
@@ -56,6 +64,11 @@ scripts/verify-hud.sh
 
 # 終了操作のループ: 実際のプロセスにシグナルを送り、終了することを確かめる
 scripts/verify-quit.sh
+```
+
+```bash
+# パッケージのループ: DMG をマウントし、アーキテクチャ、署名、ドラッグ先を検査して一度起動する
+scripts/verify-package.sh
 ```
 
 `scripts/ui-check.sh` はスクリーンショットと OCR テキストを `/tmp/quik-ui` に出力します。検証するのは四つです。パネルのテキスト、パネルとフローティングウィンドウの矩形が画面内にあること、Dock アイコンの文字がタイルの外に出ないこと、通常と詳細の両モードが正しく描画されること。どれかが失敗すると非ゼロの終了コードを返します。

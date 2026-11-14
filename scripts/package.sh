@@ -1,0 +1,139 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+APP="build/Build/Products/Release/Quik.app"
+PKG_DIR="build/package"
+STAGE="$PKG_DIR/dmg-root"
+SIGN_IDENTITY="${QUIK_SIGN_IDENTITY:-}"
+REAL_IDENTITY=0
+if [ -n "$SIGN_IDENTITY" ] && [ "$SIGN_IDENTITY" != "-" ]; then
+  REAL_IDENTITY=1
+fi
+MOUNT=""
+
+cleanup() {
+  if [ -n "$MOUNT" ]; then
+    hdiutil detach "$MOUNT" >/dev/null 2>&1 || hdiutil detach "$MOUNT" -force >/dev/null 2>&1 || true
+    rm -rf "$MOUNT"
+    MOUNT=""
+  fi
+  true
+}
+trap cleanup EXIT
+
+mkdir -p "$PKG_DIR"
+rm -rf "$STAGE"
+xcodegen generate >/dev/null
+
+BUILD_LOG="$PKG_DIR/xcodebuild.log"
+if ! xcodebuild -project Quik.xcodeproj -scheme Quik -configuration Release \
+  -derivedDataPath build ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO build \
+  >"$BUILD_LOG" 2>&1; then
+  tail -n 80 "$BUILD_LOG" >&2
+  echo "universal Release build failed; full log: $BUILD_LOG" >&2
+  exit 1
+fi
+[ -d "$APP" ] || { echo "build succeeded but $APP is missing" >&2; exit 1; }
+
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+[ -n "$VERSION" ] || { echo "missing CFBundleShortVersionString in built app" >&2; exit 1; }
+DMG="$PKG_DIR/Quik-$VERSION.dmg"
+ZIP="$PKG_DIR/Quik-$VERSION.zip"
+
+if [ "$REAL_IDENTITY" = 1 ]; then
+  codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP"
+else
+  codesign --force --deep --sign - "$APP"
+fi
+
+BUILT_ARCHS="$(lipo -archs "$APP/Contents/MacOS/Quik")"
+for arch in arm64 x86_64; do
+  case " $BUILT_ARCHS " in
+    *" $arch "*) ;;
+    *) echo "FAIL missing $arch slice (archs: $BUILT_ARCHS)" >&2; exit 1 ;;
+  esac
+done
+
+mkdir -p "$STAGE"
+ditto "$APP" "$STAGE/Quik.app"
+ln -s /Applications "$STAGE/Applications"
+cat > "$STAGE/安装说明.txt" <<'EOF'
+Quik 安装说明
+
+1. 把 Quik 拖到右边的 Applications 文件夹。
+2. 从 Applications 打开 Quik。
+3. 第一次打开时 macOS 会提示无法验证开发者。这个版本没有做 Apple 公证，提示是正常的。
+   打开「系统设置 > 隐私与安全性」，在「安全性」一栏点「仍要打开」，再确认一次。
+   macOS 14 上可以右键 Quik，选择「打开」。
+4. 之后打开不会再提示。
+
+Install
+
+1. Drag Quik into the Applications folder.
+2. Open Quik from Applications.
+3. The first launch warns that the developer cannot be verified. This build is not notarized.
+   Open System Settings > Privacy & Security, click "Open Anyway" in the Security section, then confirm.
+   On macOS 14, Control-click Quik and choose Open.
+4. Later launches do not ask.
+EOF
+
+rm -f "$DMG" "$ZIP"
+hdiutil create -volname Quik -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+ditto -c -k --keepParent "$APP" "$ZIP"
+
+if [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
+  if [ "$REAL_IDENTITY" != 1 ]; then
+    echo "QUIK_NOTARY_PROFILE is set but QUIK_SIGN_IDENTITY is not a Developer ID identity, so notarization cannot run" >&2
+    exit 1
+  fi
+  codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
+  SUBMIT_OUT="$(xcrun notarytool submit "$DMG" --wait --keychain-profile "$QUIK_NOTARY_PROFILE" 2>&1)" || {
+    echo "$SUBMIT_OUT" >&2
+    echo "notarytool submit failed" >&2
+    exit 1
+  }
+  echo "$SUBMIT_OUT"
+  if ! printf '%s\n' "$SUBMIT_OUT" | grep -q "status: Accepted"; then
+    echo "notarization did not finish Accepted" >&2
+    exit 1
+  fi
+  xcrun stapler staple "$DMG" || { echo "stapler staple failed" >&2; exit 1; }
+fi
+
+(cd "$PKG_DIR" && shasum -a 256 "Quik-$VERSION.dmg" "Quik-$VERSION.zip" > SHA256SUMS)
+
+if ! codesign --verify --deep --strict "$APP" >/dev/null 2>&1; then
+  echo "FAIL codesign --verify --deep --strict" >&2
+  exit 1
+fi
+
+MOUNT="$(mktemp -d /tmp/quik-dmg.XXXXXX)"
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG" >/dev/null
+[ -d "$MOUNT/Quik.app" ] || { echo "FAIL DMG is missing Quik.app" >&2; exit 1; }
+[ -f "$MOUNT/安装说明.txt" ] || { echo "FAIL DMG is missing the install note" >&2; exit 1; }
+if [ ! -L "$MOUNT/Applications" ] || [ "$(readlink "$MOUNT/Applications")" != "/Applications" ]; then
+  echo "FAIL DMG is missing the Applications symlink" >&2
+  exit 1
+fi
+hdiutil detach "$MOUNT" >/dev/null
+rm -rf "$MOUNT"
+MOUNT=""
+
+GK_OK=0
+GK_OUT="$(spctl -a -vv "$DMG" 2>&1)" && GK_OK=1 || true
+
+echo "version: $VERSION"
+echo "architectures: $BUILT_ARCHS"
+echo "DMG: $(pwd)/$DMG ($(du -h "$DMG" | awk '{print $1}'))"
+echo "ZIP: $(pwd)/$ZIP ($(du -h "$ZIP" | awk '{print $1}'))"
+echo "checksums: $(pwd)/$PKG_DIR/SHA256SUMS"
+if [ "$GK_OK" = 1 ]; then
+  echo "gatekeeper: accepted"
+else
+  echo "gatekeeper: rejected"
+  printf '%s\n' "$GK_OUT" | sed 's/^/  /'
+fi
+if [ "$REAL_IDENTITY" != 1 ]; then
+  echo "First launch needs System Settings > Privacy & Security > Open Anyway."
+fi
