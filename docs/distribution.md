@@ -14,15 +14,19 @@ IDENTITY="$(security find-identity -v -p codesigning \
 echo "$IDENTITY"
 ```
 
-公证凭据存在钥匙串，profile 名是 `quik-notary`。验证：
+公证凭据存在本机的 `~/.config/quik/notary.env`（目录 700，文件 600），不在钥匙串里。钥匙串会被系统整体重建，2026-11-15 23:07 发生过一次，`login.keychain-db` 的创建时间即证据，重建后 profile 就没了，发版因此卡了一小时。
+
+文件内容：
 
 ```bash
-xcrun notarytool history --keychain-profile quik-notary
+QUIK_NOTARY_APPLE_ID=<Apple ID 邮箱>
+QUIK_NOTARY_TEAM_ID=<Team ID，从证书的 OU 字段读>
+QUIK_NOTARY_PASSWORD=<App 专用密码>
 ```
 
-`package.sh` 在构建前会先跑同一条命令做预检，凭据缺失时立即退出，不开始构建。这一步是必需的：凭据缺失时 `notarytool submit` 不报错而是等待输入，2026-11-15 发 0.2.3 时因此空等了一小时。
+`package.sh` 启动就读取这个文件，缺失、不完整或凭据被拒都在构建前退出，不消耗构建时间。密码通过 `--password "@env:..."` 传给 `notarytool`，不出现在进程列表里。目录在仓库之外，`.gitignore` 另外挡了 `.env` 与 `*.env` 两道。
 
-登录钥匙串会被系统整体重建（2026-11-15 23:07 发生过一次，`login.keychain-db` 的创建时间即证据），重建后 profile 就没了，签名证书不受影响。遇到 `No Keychain password item found for profile` 时重建即可。
+仍然可用的旧方式：`QUIK_NOTARY_PROFILE=quik-notary` 走钥匙串 profile。两条路都保留，文件优先。
 
 ## 发版
 
@@ -30,8 +34,10 @@ xcrun notarytool history --keychain-profile quik-notary
 2. 打包并公证：
 
 ```bash
-QUIK_SIGN_IDENTITY="$IDENTITY" QUIK_NOTARY_PROFILE=quik-notary scripts/package.sh
+QUIK_SIGN_IDENTITY="$IDENTITY" scripts/package.sh
 ```
+
+凭据从 `~/.config/quik/notary.env` 自动读取，不需要在命令行上传。
 
 3. 验证产物：
 

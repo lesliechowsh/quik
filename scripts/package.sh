@@ -12,6 +12,31 @@ if [ -n "$SIGN_IDENTITY" ] && [ "$SIGN_IDENTITY" != "-" ]; then
 fi
 MOUNT=""
 
+# Notarization credentials live in a file rather than the login keychain,
+# because the keychain gets rebuilt and takes the profile with it.
+NOTARY_ENV="${QUIK_NOTARY_ENV:-$HOME/.config/quik/notary.env}"
+if [ -f "$NOTARY_ENV" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$NOTARY_ENV"
+  set +a
+fi
+NOTARY_MODE="none"
+if [ -n "${QUIK_NOTARY_APPLE_ID:-}" ] && [ -n "${QUIK_NOTARY_TEAM_ID:-}" ] && [ -n "${QUIK_NOTARY_PASSWORD:-}" ]; then
+  NOTARY_MODE="env"
+elif [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
+  NOTARY_MODE="profile"
+fi
+
+# @env: keeps the password out of the process list; notarytool reads the
+# variable itself.
+NOTARY_ARGS=()
+if [ "$NOTARY_MODE" = "env" ]; then
+  NOTARY_ARGS=(--apple-id "$QUIK_NOTARY_APPLE_ID" --team-id "$QUIK_NOTARY_TEAM_ID" --password "@env:QUIK_NOTARY_PASSWORD")
+elif [ "$NOTARY_MODE" = "profile" ]; then
+  NOTARY_ARGS=(--keychain-profile "$QUIK_NOTARY_PROFILE")
+fi
+
 cleanup() {
   if [ -n "$MOUNT" ]; then
     hdiutil detach "$MOUNT" >/dev/null 2>&1 || hdiutil detach "$MOUNT" -force >/dev/null 2>&1 || true
@@ -22,17 +47,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# notarytool blocks on a prompt when the profile is missing instead of failing,
-# which once cost an hour of a release run. Check the credential before the
+# A credentials file that exists but is incomplete would silently ship an
+# unnotarized build, so treat it as an error rather than a no-op.
+if [ -f "$NOTARY_ENV" ] && [ "$NOTARY_MODE" = "none" ]; then
+  echo "$NOTARY_ENV exists but is incomplete; fill in QUIK_NOTARY_APPLE_ID and QUIK_NOTARY_PASSWORD" >&2
+  exit 1
+fi
+
+# notarytool blocks on a prompt when the credentials are missing instead of
+# failing, which once cost an hour of a release run. Check them before the
 # build starts, with stdin closed so a prompt cannot hang.
-if [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
+if [ "$NOTARY_MODE" != "none" ]; then
   [ "$REAL_IDENTITY" = 1 ] || {
-    echo "QUIK_NOTARY_PROFILE is set but QUIK_SIGN_IDENTITY is not a Developer ID identity" >&2
+    echo "notarization is configured but QUIK_SIGN_IDENTITY is not a Developer ID identity" >&2
     exit 1
   }
-  if ! xcrun notarytool history --keychain-profile "$QUIK_NOTARY_PROFILE" </dev/null >/dev/null 2>&1; then
-    echo "notary profile $QUIK_NOTARY_PROFILE is missing or unreadable; nothing was built" >&2
-    echo "recreate it: xcrun notarytool store-credentials $QUIK_NOTARY_PROFILE --apple-id <id> --team-id <team>" >&2
+  if ! xcrun notarytool history "${NOTARY_ARGS[@]}" </dev/null >/dev/null 2>&1; then
+    echo "notary credentials are missing or rejected; nothing was built" >&2
+    echo "fill in $NOTARY_ENV (QUIK_NOTARY_APPLE_ID, QUIK_NOTARY_TEAM_ID, QUIK_NOTARY_PASSWORD)" >&2
     exit 1
   fi
 fi
@@ -129,13 +161,9 @@ rm -f "$PKG_DIR/SHA256SUMS"
 hdiutil create -volname Quik -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 ditto -c -k --keepParent "$APP" "$ZIP"
 
-if [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
-  if [ "$REAL_IDENTITY" != 1 ]; then
-    echo "QUIK_NOTARY_PROFILE is set but QUIK_SIGN_IDENTITY is not a Developer ID identity, so notarization cannot run" >&2
-    exit 1
-  fi
+if [ "$NOTARY_MODE" != "none" ]; then
   codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
-  SUBMIT_OUT="$(xcrun notarytool submit "$DMG" --wait --keychain-profile "$QUIK_NOTARY_PROFILE" </dev/null 2>&1)" || {
+  SUBMIT_OUT="$(xcrun notarytool submit "$DMG" --wait "${NOTARY_ARGS[@]}" </dev/null 2>&1)" || {
     echo "$SUBMIT_OUT" >&2
     echo "notarytool submit failed" >&2
     exit 1
