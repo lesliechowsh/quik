@@ -320,6 +320,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         toggle.target = self
         toggle.state = store.hudVisible ? .on : .off
         menu.addItem(toggle)
+        menu.addItem(.separator())
+        let uninstall = NSMenuItem(title: "卸载 Quik…", action: #selector(uninstallAction), keyEquivalent: "")
+        uninstall.target = self
+        menu.addItem(uninstall)
         NSMenu.popUpContextMenu(menu, with: event, for: button)
     }
 
@@ -329,6 +333,21 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     @objc private func toggleHUDAction() {
         toggleHUD()
+    }
+
+    // macOS 在应用被删除后不会执行任何代码，所以清理只能由应用活着时完成：
+    // 这里删掉 Quik 放进系统的全部东西，再退出，用户最后拖走应用本体。
+    @objc private func uninstallAction() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "卸载 Quik？"
+        alert.informativeText = "会删除 Quik 放进系统的所有东西：两个标准技能目录里的 quik 技能、~/.local/bin/quik 命令行工具、~/Library/Application Support/Quik 数据，然后退出。之后把 Quik 从「应用程序」拖进废纸篓就完成了。"
+        alert.addButton(withTitle: "卸载")
+        alert.addButton(withTitle: "取消")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        AgentInstall.uninstall()
+        NSApp.terminate(nil)
     }
 
     private func showPopover(recordFrame: Bool) {

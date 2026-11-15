@@ -92,7 +92,6 @@ check_agent_install() {
   defaults write "$BUNDLE_ID" advancedMode -bool false
   defaults write "$BUNDLE_ID" hudVisible -bool true
   rm -f /tmp/quik-panel-windowid.txt
-  printf 'quik-ui-check-sentinel' | pbcopy
   open -n --env QUIK_PREVIEW=fluid --env QUIK_PREVIEW_AGENT=1 "$APP"
   for _ in $(seq 1 100); do
     [ -f /tmp/quik-panel-windowid.txt ] && break
@@ -113,23 +112,21 @@ check_agent_install() {
   local text_norm
   text_norm="$(tr -d ' ()（）' < "$OUT/agent.txt")"
   local missing=0
-  for needle in "让AI助手帮你盯着电脑" "已复制" "返回"; do
+  for needle in "让AI助手帮你盯着电脑" "已安装" "返回"; do
     if ! grep -qF "$(tr -d ' ()（）' <<< "$needle")" <<< "$text_norm"; then
       echo "FAIL agent install: missing '$needle'"
       missing=1
       fail=1
     fi
   done
-  if pbpaste | grep -q "name: quik" \
-     && pbpaste | grep -q "local/bin/quik" \
-     && ! pbpaste | grep -q "/Users/" \
-     && ! pbpaste | grep -q "Contents/Library"; then
-    echo "PASS agent install (view renders, prompt copied, no machine paths)"
-  else
-    echo "FAIL agent install: clipboard prompt missing or carries machine paths"
+  # Disk reality is asserted by verify-agent.sh on a non-preview launch. Here we
+  # only require the view to render and to paint no machine path on screen.
+  if grep -q "/Users/" <<< "$text_norm" || grep -q "Contents/Library" <<< "$text_norm"; then
+    echo "FAIL agent install: machine path visible in the view"
     missing=1
     fail=1
   fi
+  [ "$missing" -eq 0 ] && echo "PASS agent install (view renders the standard skill locations, no machine paths)"
   pkill -x Quik 2>/dev/null || true
 }
 

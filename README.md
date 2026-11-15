@@ -46,9 +46,9 @@ scripts/run.sh
 
 ## AI 助手
 
-装好之后，AI 助手（Claude Code、Cursor 等）也能回答"现在电脑卡不卡"。Quik 运行时会自动把命令行工具放到 `~/.local/bin/quik`，这一步不需要任何人操作。要让助手会用它，打开面板点"安装到 AI 助手"，提示词自动复制，粘贴给助手即可。提示词内嵌完整的技能文件，助手会自己存进技能目录。提示词和技能文件只引用 `quik` 与 `~/.local/bin/quik` 两个固定位置，不含任何本机路径，贴到哪里都不会带出你机器上的目录。装一次就行，之后随 Quik 常驻。
+装好之后，AI 助手（Claude Code、Codex、Cursor 等）也能回答"现在电脑卡不卡"，这一步不需要任何人操作。Quik 遵循 Agent Skills 开放标准——一个技能就是一个带 SKILL.md 的文件夹，兼容的助手启动时自动从磁盘发现——启动时自动把监控技能写进两个标准技能目录：`~/.agents/skills/quik`（Codex、Cursor、Cline、Zed、Warp 等识别）和 `~/.claude/skills/quik`（Claude Code 识别），命令行工具放到 `~/.local/bin/quik`。技能文件只引用这几个固定位置，不含任何本机路径。打开助手直接问就行；面板里的"AI 助手"视图能看到装到了哪里。
 
-命令行工具的 `quik` 输出人类可读摘要，`quik --json` 输出机器可读的 JSON，退出码直接表示状态：0 流畅，1 有点卡，2 卡住了，3 没有数据。应用每秒把评估结果原子写入 `~/Library/Application Support/Quik/status.json`，实测 516 字节；退出时删除，5 秒没更新按过期处理。技能文件教 AI 助手引用现成的中文结论、不要自己再跑 top 或采样。不想用这个功能时，删掉助手技能目录里的 `quik` 文件夹和 `~/.local/bin/quik` 即可。
+命令行工具的 `quik` 输出人类可读摘要，`quik --json` 输出机器可读的 JSON，退出码直接表示状态：0 流畅，1 有点卡，2 卡住了，3 没有数据。应用每秒把评估结果原子写入 `~/Library/Application Support/Quik/status.json`，实测 516 字节；退出时删除，5 秒没更新按过期处理。技能文件教 AI 助手引用现成的中文结论、不要自己再跑 top 或采样。卸载不用手工找文件：右键点菜单栏图标选"卸载 Quik"，一次删掉两个技能目录里的 quik 技能、`~/.local/bin/quik` 和 `~/Library/Application Support/Quik`，然后退出；之后把应用拖进废纸篓就完成了。macOS 在应用被删后不会执行任何代码，所以清理必须在应用还活着时做。技能文件里写了同样的清理说明，对任何助手说"帮我卸载 Quik"也能清干净。
 
 ## 验证
 
@@ -76,13 +76,13 @@ scripts/verify-quit.sh
 # 安装包闭环：挂载 DMG，检查架构、签名与拖入目标，并启动一次
 scripts/verify-package.sh
 
-# Agent 闭环：状态文件、~/.local/bin 安装、命令行工具两种输出、过期与退出清理
+# Agent 闭环：状态文件、~/.local/bin 与两个技能目录的安装、命令行工具两种输出、过期与退出清理
 scripts/verify-agent.sh
 ```
 
 维护者发版步骤见 `docs/distribution.md`。
 
-`scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做五类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确、"安装到 AI 助手"视图渲染且提示词进了剪贴板、且剪贴板里不含任何机器路径。任何断言失败会返回非零退出码。
+`scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做五类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确、"AI 助手"视图渲染且不把任何机器路径画上屏幕。任何断言失败会返回非零退出码。
 
 窗口位置单独断言，是因为按窗口 ID 截图只证明内容对，不证明它出现在屏幕上。早期版本的面板顶到屏幕外，内容截图完好，检查照样通过。
 

@@ -36,3 +36,7 @@ quik --json
 ## 边界
 
 Quik 测的是系统资源争用，不是单个应用界面的卡顿。CPU 满载但调度正常时它报"有点卡"，不报"卡住了"；内存压力或温度 critical 时才直接报"卡住了"。
+
+## 卸载
+
+本技能由 Quik 按 Agent Skills 标准写入 `~/.agents/skills/quik` 与 `~/.claude/skills/quik`，命令行工具在 `~/.local/bin/quik`，状态数据在 `~/Library/Application Support/Quik`。用户要卸载 Quik 时，删除这几处再移除 Quik 应用本身即可，没有其他残留。也可以直接说"帮我卸载 Quik"，助手按这段说明清理。

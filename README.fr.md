@@ -46,9 +46,9 @@ Le rapport `sample` est écrit dans un dossier temporaire et ouvert automatiquem
 
 ## Assistant IA
 
-Une fois l'installation faite, un assistant IA (Claude Code, Cursor, etc.) peut aussi répondre à « est-ce que la machine bloque maintenant ». Pendant qu'il tourne, Quik place tout seul l'outil en ligne de commande dans `~/.local/bin/quik` ; rien à faire. Pour apprendre cela à votre assistant, ouvrez le panneau et cliquez sur « 安装到 AI 助手 » (installer pour l'assistant IA) : le prompt est copié automatiquement, collez-le dans votre assistant. Le prompt embarque le fichier de compétence complet, et l'assistant l'enregistre dans son propre répertoire. Le prompt et le fichier de compétence ne référencent que `quik` et `~/.local/bin/quik`, sans aucun chemin de votre machine ; les coller n'importe où ne révèle rien de votre arborescence. Une seule installation, ensuite cela vit avec Quik.
+Une fois l'installation faite, un assistant IA (Claude Code, Codex, Cursor, etc.) peut aussi répondre à « est-ce que la machine bloque maintenant », sans aucune étape de votre côté. Quik suit le standard ouvert Agent Skills — une compétence est un dossier avec un `SKILL.md` que les assistants compatibles découvrent au démarrage — et, pendant qu'il tourne, maintient la compétence de surveillance dans les deux répertoires standards : `~/.agents/skills/quik` (lu par Codex, Cursor, Cline, Zed, Warp et d'autres) et `~/.claude/skills/quik` (lu par Claude Code), plus l'outil en ligne de commande dans `~/.local/bin/quik`. La compétence ne référence que ces emplacements fixes et ne contient aucun chemin de votre machine. Posez la question à votre assistant, c'est tout ; la vue « AI 助手 » du panneau montre où tout est installé.
 
-`quik` affiche un résumé lisible, `quik --json` un JSON exploitable par une machine, et le code de sortie donne le verdict : 0 fluide, 1 ralenti, 2 bloqué, 3 pas de données. Chaque seconde, l'application réécrit atomiquement `~/Library/Application Support/Quik/status.json`, mesuré à 516 octets ; le fichier est supprimé à la fermeture, et des données de plus de 5 secondes comptent comme périmées. Le fichier de compétence apprend à l'assistant à citer le résumé tout fait et à ne pas relancer top ni un échantillonnage de son côté. Pour arrêter, supprimez le dossier `quik` dans le répertoire de compétences de l'assistant ainsi que `~/.local/bin/quik`.
+`quik` affiche un résumé lisible, `quik --json` un JSON exploitable par une machine, et le code de sortie donne le verdict : 0 fluide, 1 ralenti, 2 bloqué, 3 pas de données. Chaque seconde, l'application réécrit atomiquement `~/Library/Application Support/Quik/status.json`, mesuré à 516 octets ; le fichier est supprimé à la fermeture, et des données de plus de 5 secondes comptent comme périmées. Le fichier de compétence apprend à l'assistant à citer le résumé tout fait et à ne pas relancer top ni un échantillonnage de son côté. La désinstallation ne demande aucune chasse aux fichiers : faites un clic droit sur l'icône de la barre des menus et choisissez « 卸载 Quik », qui supprime d'un coup la compétence quik des deux répertoires, `~/.local/bin/quik` et `~/Library/Application Support/Quik`, puis quitte ; glissez ensuite l'application à la corbeille. macOS n'exécute aucun code après la suppression d'une application, le nettoyage doit donc se faire pendant qu'elle vit. Le fichier de compétence porte les mêmes instructions de nettoyage, si bien que demander à n'importe quel assistant de « désinstaller Quik » fonctionne aussi.
 
 ## Vérification
 
@@ -76,13 +76,13 @@ scripts/verify-quit.sh
 # Boucle du paquet : monte le DMG, vérifie les architectures, la signature et la cible du glisser-déposer, puis le lance une fois
 scripts/verify-package.sh
 
-# Boucle de l'agent : fichier d'état, installation dans ~/.local/bin, les deux sorties du CLI, péremption et nettoyage à la fermeture
+# Boucle de l'agent : fichier d'état, installation dans ~/.local/bin et les deux répertoires de compétences, les deux sorties du CLI, péremption et nettoyage à la fermeture
 scripts/verify-agent.sh
 ```
 
 Les étapes de publication sont dans `docs/distribution.md`.
 
-`scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie cinq choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, le rendu correct des deux modes, et la vue « 安装到 AI 助手 » affichée avec le prompt copié dans le presse-papiers sans aucun chemin de machine. Toute assertion en échec renvoie un code de sortie non nul.
+`scripts/ui-check.sh` écrit les captures et le texte OCR dans `/tmp/quik-ui`. Il vérifie cinq choses : le texte du panneau, les rectangles du panneau et de la fenêtre flottante restant à l'écran, le texte de l'icône du Dock restant dans la tuile, le rendu correct des deux modes, et la vue « AI 助手 » affichée sans aucun chemin de machine à l'écran. Toute assertion en échec renvoie un code de sortie non nul.
 
 La position de la fenêtre est vérifiée séparément, car une capture par identifiant de fenêtre prouve que le contenu est bon, pas que la fenêtre est à l'écran. Une première version plaçait le panneau au-dessus du haut de l'écran ; la capture du contenu était parfaite et le contrôle passait quand même.
 

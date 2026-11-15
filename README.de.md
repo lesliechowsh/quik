@@ -46,9 +46,9 @@ Der `sample`-Bericht wird in ein temporäres Verzeichnis geschrieben und automat
 
 ## KI-Assistent
 
-Nach der Installation kann auch ein KI-Assistent (Claude Code, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten. Während Quik läuft, legt es das Kommandozeilenwerkzeug von selbst in `~/.local/bin/quik` ab; nichts zu tun. Dem Assistenten bringt man das bei, indem man im Panel auf „安装到 AI 助手“ (für den KI-Assistenten installieren) klickt; der Prompt wird automatisch kopiert und lässt sich einfügen. Der Prompt bettet die vollständige Skill-Datei ein, und der Assistent speichert sie in sein eigenes Skill-Verzeichnis. Der Prompt und die Skill-Datei verweisen nur auf `quik` und `~/.local/bin/quik` und enthalten keinerlei Pfade deiner Maschine; egal wohin man sie einfügt, gibt nichts über deine Verzeichnisstruktur preis. Einmal installiert, lebt es mit Quik weiter.
+Nach der Installation kann auch ein KI-Assistent (Claude Code, Codex, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten, ohne dass Sie etwas tun. Quik folgt dem offenen Agent-Skills-Standard — eine Skill ist ein Ordner mit einer `SKILL.md`, den kompatible Assistenten beim Start selbst finden — und legt während des Laufs die Überwachungs-Skill in den beiden Standardverzeichnissen ab: `~/.agents/skills/quik` (gelesen von Codex, Cursor, Cline, Zed, Warp u. a.) und `~/.claude/skills/quik` (gelesen von Claude Code), dazu das Kommandozeilenwerkzeug in `~/.local/bin/quik`. Die Skill verweist nur auf diese festen Orte und enthält keine Pfade Ihrer Maschine. Fragen Sie den Assistenten einfach; die Ansicht „AI 助手“ im Panel zeigt, wo alles liegt.
 
-Das Werkzeug gibt mit `quik` eine lesbare Zusammenfassung aus, mit `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren. Wenn du das nicht willst, lösche den `quik`-Ordner im Skill-Verzeichnis des Assistenten und `~/.local/bin/quik`.
+Das Werkzeug gibt mit `quik` eine lesbare Zusammenfassung aus, mit `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren. Deinstallieren erfordert keine Dateisuche: Rechtsklick auf das Menüleisten-Symbol und „卸载 Quik“ wählen, das die quik-Skill aus beiden Verzeichnissen, `~/.local/bin/quik` und `~/Library/Application Support/Quik` in einem Schritt löscht und sich beendet; danach ziehen Sie die App in den Papierkorb. macOS führt nach dem Löschen einer App keinen Code mehr aus, die Bereinigung muss also geschehen, während die App lebt. Die Skill-Datei trägt dieselben Anweisungen, daher klappt auch „hilf mir, Quik zu deinstallieren“ bei jedem Assistenten.
 
 ## Prüfung
 
@@ -76,13 +76,13 @@ scripts/verify-quit.sh
 # Paket-Schleife: hängt das DMG ein, prüft Architekturen, Signatur und das Ziel und startet es einmal
 scripts/verify-package.sh
 
-# Agenten-Schleife: Statusdatei, Installation nach ~/.local/bin, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
+# Agenten-Schleife: Statusdatei, Installation nach ~/.local/bin und in beide Skill-Verzeichnisse, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
 scripts/verify-agent.sh
 ```
 
 Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
 
-`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „安装到 AI 助手“ mit dem Prompt im Clipboard und ohne jeden Maschinenpfad. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
+`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „AI 助手“ ohne jeden Maschinenpfad auf dem Bildschirm. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.
 

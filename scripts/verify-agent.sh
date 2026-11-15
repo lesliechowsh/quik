@@ -46,6 +46,23 @@ else
   echo "FAIL ~/.local/bin/quik missing after launch"; fail=1
 fi
 
+# The skill follows the Agent Skills open standard: ~/.agents/skills is the
+# cross-agent user-level directory (Codex, Cursor, Cline, Zed, Warp, ...),
+# ~/.claude/skills is Claude Code's own. Both must match the bundled file.
+for dir in ".agents/skills/quik" ".claude/skills/quik"; do
+  if [ -f "$HOME/$dir/SKILL.md" ]; then
+    echo "PASS skill installed at ~/$dir"
+    cmp -s "$HOME/$dir/SKILL.md" "$APP/Contents/Resources/quik-skill.md" \
+      && echo "PASS ~/$dir skill matches the bundle" \
+      || { echo "FAIL ~/$dir skill differs from the bundle"; fail=1; }
+  else
+    echo "FAIL skill missing at ~/$dir"; fail=1
+  fi
+done
+if grep -q "/Users/" "$HOME/.agents/skills/quik/SKILL.md" 2>/dev/null; then
+  echo "FAIL installed skill carries machine paths"; fail=1
+fi
+
 "$CLI" --json > "$JSON_OUT"
 python3 -I - "$JSON_OUT" <<'EOF' || fail=1
 import json, sys

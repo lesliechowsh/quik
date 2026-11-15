@@ -75,21 +75,57 @@ final class StatusSnapshotTests: XCTestCase {
         try? FileManager.default.removeItem(at: url)
     }
 
-    func testAgentPromptCarriesSkillWithoutAnyMachinePath() throws {
-        let prompt = try XCTUnwrap(AgentInstall.prompt())
-        XCTAssertTrue(prompt.contains("name: quik"), "frontmatter 原样保留")
-        XCTAssertTrue(prompt.contains("退出码即状态"), "技能正文完整带进提示词")
-        XCTAssertTrue(prompt.contains("~/.local/bin/quik"), "命令只出现在无用户名的固定位置")
-        XCTAssertFalse(prompt.contains("{{"), "技能是静态内容，不需要占位符")
-        XCTAssertFalse(prompt.contains("/Users/"), "提示词不得携带机器绝对路径")
-        XCTAssertFalse(prompt.contains(".app"), "提示词不得引用应用包内路径")
+    func testSkillMarkdownDocumentsStandardLocationsAndUninstall() throws {
+        let skill = try XCTUnwrap(AgentInstall.skillMarkdown)
+        XCTAssertTrue(skill.contains("name: quik"), "frontmatter 原样保留")
+        XCTAssertTrue(skill.contains("退出码即状态"))
+        XCTAssertTrue(skill.contains("~/.local/bin/quik"), "命令只出现在无用户名的固定位置")
+        for location in AgentInstall.skillLocations {
+            XCTAssertTrue(skill.contains(location), "技能要写明自己被装在哪：\(location)")
+        }
+        XCTAssertTrue(skill.contains("卸载"), "技能自描述卸载方式，助手能替用户清理")
+        XCTAssertFalse(skill.contains("{{"), "技能是静态内容，不需要占位符")
+        XCTAssertFalse(skill.contains("/Users/"), "技能不得携带机器绝对路径")
+        XCTAssertFalse(skill.contains(".app"), "技能不得引用应用包内路径")
     }
 
-    func testSkillMarkdownIsPathFree() throws {
-        let skill = try XCTUnwrap(AgentInstall.skillMarkdown)
-        XCTAssertTrue(skill.contains("~/.local/bin/quik"))
-        XCTAssertFalse(skill.contains("/Users/"))
-        XCTAssertFalse(skill.contains("{{"))
+    func testSkillInstallsIntoStandardDirectories() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quik-skill-\(UUID().uuidString)")
+        XCTAssertTrue(AgentInstall.installSkill(home: home))
+        let bundled = try XCTUnwrap(AgentInstall.skillMarkdown)
+        for location in AgentInstall.skillLocations {
+            let file = home.appendingPathComponent(location).appendingPathComponent("SKILL.md")
+            XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), bundled)
+            XCTAssertFalse(try String(contentsOf: file, encoding: .utf8).contains("/Users/"))
+        }
+        XCTAssertTrue(AgentInstall.skillIsInstalled(home: home))
+        XCTAssertTrue(AgentInstall.installSkill(home: home), "重复安装幂等")
+        try? FileManager.default.removeItem(at: home)
+    }
+
+    func testUninstallRemovesEverythingQuikPlaced() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quik-uninstall-\(UUID().uuidString)")
+        XCTAssertTrue(AgentInstall.installSkill(home: home))
+        let cli = home.appendingPathComponent(".local/bin/quik")
+        try FileManager.default.createDirectory(at: cli.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("#!/bin/sh\n".utf8).write(to: cli)
+        let support = home.appendingPathComponent("Library/Application Support/Quik")
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: support.appendingPathComponent("status.json"))
+
+        AgentInstall.uninstall(home: home)
+        for location in AgentInstall.skillLocations {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: home.appendingPathComponent(location).path),
+                "技能目录要删干净：\(location)"
+            )
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cli.path), "命令行工具要删掉")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: support.path), "状态数据目录要删掉")
+        AgentInstall.uninstall(home: home) // 重复卸载幂等，不崩
+        try? FileManager.default.removeItem(at: home)
     }
 
     func testInstallCommandLineCopiesToolIntoHome() throws {

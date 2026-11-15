@@ -164,7 +164,7 @@ struct PanelView: View {
                     .buttonStyle(.link)
                     .font(.caption)
                 if !store.advanced {
-                    Button("安装到 AI 助手") { showingAgentInstall = true }
+                    Button("AI 助手") { showingAgentInstall = true }
                         .buttonStyle(.link)
                         .font(.caption)
                 }

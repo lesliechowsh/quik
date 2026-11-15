@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 预览注入只服务截图检查，不该往真实目录写文件。
         if preview == nil {
             DispatchQueue.global(qos: .utility).async {
+                AgentInstall.installSkill()
                 AgentInstall.installCommandLine()
             }
         }
