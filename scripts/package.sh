@@ -22,6 +22,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# notarytool blocks on a prompt when the profile is missing instead of failing,
+# which once cost an hour of a release run. Check the credential before the
+# build starts, with stdin closed so a prompt cannot hang.
+if [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
+  [ "$REAL_IDENTITY" = 1 ] || {
+    echo "QUIK_NOTARY_PROFILE is set but QUIK_SIGN_IDENTITY is not a Developer ID identity" >&2
+    exit 1
+  }
+  if ! xcrun notarytool history --keychain-profile "$QUIK_NOTARY_PROFILE" </dev/null >/dev/null 2>&1; then
+    echo "notary profile $QUIK_NOTARY_PROFILE is missing or unreadable; nothing was built" >&2
+    echo "recreate it: xcrun notarytool store-credentials $QUIK_NOTARY_PROFILE --apple-id <id> --team-id <team>" >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$PKG_DIR"
 rm -rf "$STAGE"
 xcodegen generate >/dev/null
@@ -120,7 +135,7 @@ if [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
     exit 1
   fi
   codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
-  SUBMIT_OUT="$(xcrun notarytool submit "$DMG" --wait --keychain-profile "$QUIK_NOTARY_PROFILE" 2>&1)" || {
+  SUBMIT_OUT="$(xcrun notarytool submit "$DMG" --wait --keychain-profile "$QUIK_NOTARY_PROFILE" </dev/null 2>&1)" || {
     echo "$SUBMIT_OUT" >&2
     echo "notarytool submit failed" >&2
     exit 1

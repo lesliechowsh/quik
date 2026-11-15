@@ -20,6 +20,10 @@ echo "$IDENTITY"
 xcrun notarytool history --keychain-profile quik-notary
 ```
 
+`package.sh` 在构建前会先跑同一条命令做预检，凭据缺失时立即退出，不开始构建。这一步是必需的：凭据缺失时 `notarytool submit` 不报错而是等待输入，2026-11-15 发 0.2.3 时因此空等了一小时。
+
+登录钥匙串会被系统整体重建（2026-11-15 23:07 发生过一次，`login.keychain-db` 的创建时间即证据），重建后 profile 就没了，签名证书不受影响。遇到 `No Keychain password item found for profile` 时重建即可。
+
 ## 发版
 
 1. 改版本号，`project.yml` 与 `Sources/App/Info.plist` 两处都要改。
