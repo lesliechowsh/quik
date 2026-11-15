@@ -4,5 +4,3 @@ DerivedData/
 *.xcodeproj
 *.xcuserstate
 *.profraw
-.env
-*.env

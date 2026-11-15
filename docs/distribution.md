@@ -14,19 +14,18 @@ IDENTITY="$(security find-identity -v -p codesigning \
 echo "$IDENTITY"
 ```
 
-公证凭据存在本机的 `~/.config/quik/notary.env`（目录 700，文件 600），不在钥匙串里。钥匙串会被系统整体重建，2026-11-15 23:07 发生过一次，`login.keychain-db` 的创建时间即证据，重建后 profile 就没了，发版因此卡了一小时。
+公证凭据只在登录钥匙串里，profile 名叫 `quik-notary`。没有凭据文件。
 
-文件内容：
+第一次发版，或钥匙串被系统整体重建后（2026-11-15 23:07 发生过一次，`login.keychain-db` 的创建时间即证据，重建把 profile 带走了），由账号本人在终端敲一次：
 
 ```bash
-QUIK_NOTARY_APPLE_ID=<Apple ID 邮箱>
-QUIK_NOTARY_TEAM_ID=<Team ID，从证书的 OU 字段读>
-QUIK_NOTARY_PASSWORD=<App 专用密码>
+xcrun notarytool store-credentials quik-notary \
+  --apple-id <Apple ID 邮箱> --team-id A747RQ7RTH
 ```
 
-`package.sh` 启动就读取这个文件，缺失、不完整或凭据被拒都在构建前退出，不消耗构建时间。密码以字面值通过 `--password` 传给 `notarytool`：它没有 `@env:` 这种引用方式（那是 `altool` 的功能），传 `@env:NAME` 会把字面字符串当密码，每次都是 401。代价是密码在公证请求期间会出现在本机的 `ps` 里。目录在仓库之外，`.gitignore` 另外挡了 `.env` 与 `*.env` 两道。
+它会提示输入 App 专用密码，输入不回显，也不经过命令行参数。系统会再要求钥匙串授权。
 
-仍然可用的旧方式：`QUIK_NOTARY_PROFILE=quik-notary` 走钥匙串 profile。两条路都保留，文件优先。
+`package.sh` 默认用这个 profile；profile 不存在或凭据被拒时在构建前退出，不消耗构建时间。不要在命令行上传密码：`notarytool` 不支持 `@env:` 这种引用（那是 `altool` 的语法），传 `@env:NAME` 会把字面字符串当密码，每次都是 401；而字面密码会出现在本机 `ps` 里。确实要做不公证的本地调试构建时用 `QUIK_SKIP_NOTARY=1`。
 
 ## 发版
 
@@ -37,7 +36,7 @@ QUIK_NOTARY_PASSWORD=<App 专用密码>
 QUIK_SIGN_IDENTITY="$IDENTITY" scripts/package.sh
 ```
 
-凭据从 `~/.config/quik/notary.env` 自动读取，不需要在命令行上传。
+凭据从钥匙串 profile 读，不需要在命令行上传。
 
 3. 验证产物：
 

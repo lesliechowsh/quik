@@ -12,34 +12,17 @@ if [ -n "$SIGN_IDENTITY" ] && [ "$SIGN_IDENTITY" != "-" ]; then
 fi
 MOUNT=""
 
-# Notarization credentials live in a file rather than the login keychain,
-# because the keychain gets rebuilt and takes the profile with it.
-NOTARY_ENV="${QUIK_NOTARY_ENV:-$HOME/.config/quik/notary.env}"
-if [ -f "$NOTARY_ENV" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "$NOTARY_ENV"
-  set +a
+# No credential file. The App-specific password lives only in the login
+# keychain, under a notarytool profile the account holder creates by hand:
+# store-credentials prompts with no echo, so nothing hits disk or argv.
+NOTARY_MODE="profile"
+if [ "${QUIK_SKIP_NOTARY:-0}" = "1" ]; then
+  NOTARY_MODE="none"
 fi
-NOTARY_MODE="none"
-if [ -n "${QUIK_NOTARY_KEY_PATH:-}" ] && [ -n "${QUIK_NOTARY_KEY_ID:-}" ] && [ -n "${QUIK_NOTARY_ISSUER:-}" ]; then
-  NOTARY_MODE="key"
-elif [ -n "${QUIK_NOTARY_APPLE_ID:-}" ] && [ -n "${QUIK_NOTARY_TEAM_ID:-}" ] && [ -n "${QUIK_NOTARY_PASSWORD:-}" ]; then
-  NOTARY_MODE="env"
-elif [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
-  NOTARY_MODE="profile"
-fi
-
-# "env" mode passes the password literally: notarytool has no @env: source,
-# unlike altool, and handing it "@env:NAME" makes every request 401. The cost
-# is that the password is visible in ps on this machine while the request runs.
+NOTARY_PROFILE="${QUIK_NOTARY_PROFILE:-quik-notary}"
 NOTARY_ARGS=()
-if [ "$NOTARY_MODE" = "key" ]; then
-  NOTARY_ARGS=(--key "$QUIK_NOTARY_KEY_PATH" --key-id "$QUIK_NOTARY_KEY_ID" --issuer "$QUIK_NOTARY_ISSUER")
-elif [ "$NOTARY_MODE" = "env" ]; then
-  NOTARY_ARGS=(--apple-id "$QUIK_NOTARY_APPLE_ID" --team-id "$QUIK_NOTARY_TEAM_ID" --password "$QUIK_NOTARY_PASSWORD")
-elif [ "$NOTARY_MODE" = "profile" ]; then
-  NOTARY_ARGS=(--keychain-profile "$QUIK_NOTARY_PROFILE")
+if [ "$NOTARY_MODE" = "profile" ]; then
+  NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
 fi
 
 cleanup() {
@@ -52,17 +35,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# A credentials file that exists but is incomplete would silently ship an
-# unnotarized build, so treat it as an error rather than a no-op.
-if [ -f "$NOTARY_ENV" ] && [ "$NOTARY_MODE" = "none" ]; then
-  echo "$NOTARY_ENV exists but is incomplete; fill in QUIK_NOTARY_APPLE_ID and QUIK_NOTARY_PASSWORD, or the three API key values" >&2
-  exit 1
-fi
-if [ "$NOTARY_MODE" = "key" ] && [ ! -f "$QUIK_NOTARY_KEY_PATH" ]; then
-  echo "$QUIK_NOTARY_KEY_PATH does not exist" >&2
-  exit 1
-fi
-
 # notarytool blocks on a prompt when the credentials are missing instead of
 # failing, which once cost an hour of a release run. Check them before the
 # build starts, with stdin closed so a prompt cannot hang.
@@ -73,7 +45,8 @@ if [ "$NOTARY_MODE" != "none" ]; then
   }
   if ! xcrun notarytool history "${NOTARY_ARGS[@]}" </dev/null >/dev/null 2>&1; then
     echo "notary credentials are missing or rejected; nothing was built" >&2
-    echo "fill in $NOTARY_ENV (QUIK_NOTARY_APPLE_ID, QUIK_NOTARY_TEAM_ID, QUIK_NOTARY_PASSWORD)" >&2
+    echo "create the keychain profile once:" >&2
+    echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <Apple ID> --team-id <Team ID>" >&2
     exit 1
   fi
 fi
