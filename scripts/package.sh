@@ -75,6 +75,17 @@ ZIP="$PKG_DIR/Quik-$VERSION.zip"
 # signing because any later change to the binary breaks the signature.
 strip -S "$APP/Contents/MacOS/Quik" "$APP/Contents/Library/quik"
 
+# A stripped binary still keeps LLVM profile sections, and those name source
+# files by absolute path. Fail here rather than ship a local username.
+for bin in "$APP/Contents/MacOS/Quik" "$APP/Contents/Library/quik"; do
+  [ -f "$bin" ] || continue
+  hits="$(LC_ALL=C grep -a -o '/Users/' "$bin" | wc -l | tr -d ' ')" || true
+  if [ "$hits" != "0" ]; then
+    echo "FAIL $bin contains $hits local paths (/Users/); check ENABLE_CODE_COVERAGE" >&2
+    exit 1
+  fi
+done
+
 if [ "$REAL_IDENTITY" = 1 ]; then
   # codesign --deep re-signs only the nested locations it knows (Frameworks,
   # PlugIns, XPCServices). The CLI sits in Contents/Library, so it needs an

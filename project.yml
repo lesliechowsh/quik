@@ -12,6 +12,11 @@ settings:
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
     ENABLE_DEBUG_DYLIB: NO
+    # Xcode's default left -profile-generate on in Release. It emits
+    # __llvm_prf_names, which records every source file's absolute path, so the
+    # shipped binary carried /Users/<name> 1936 times. Off for every build.
+    ENABLE_CODE_COVERAGE: NO
+    CLANG_COVERAGE_MAPPING: NO
 targets:
   Quik:
     type: application
@@ -48,6 +53,11 @@ targets:
         LSMinimumSystemVersion: "14.0"
     settings:
       base:
+        # Target level, not project level: Xcode's target defaults for these
+        # two win over a project-wide value, and a Release binary built with
+        # them on carried /Users/<name> 1936 times via __llvm_prf_names.
+        ENABLE_CODE_COVERAGE: NO
+        CLANG_COVERAGE_MAPPING: NO
         PRODUCT_BUNDLE_IDENTIFIER: dev.quik.app
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Probe/CShim/Quik-Bridging-Header.h
         OTHER_LDFLAGS: "-lproc"
@@ -62,6 +72,8 @@ targets:
       - path: Sources/CLI/main.swift
     settings:
       base:
+        ENABLE_CODE_COVERAGE: NO
+        CLANG_COVERAGE_MAPPING: NO
         PRODUCT_NAME: quik
         # The module name defaults to the product, and "quik" collides with the
         # app's "Quik" module on a case-insensitive volume: tests sometimes
