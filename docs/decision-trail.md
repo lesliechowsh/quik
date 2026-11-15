@@ -245,3 +245,5 @@ CLI 放弃 PATH 安装作为必选步骤。技能文件里写的是应用内的�
 验证。`DeltaTests` 之外新增 `StatusSnapshotTests` 五条：契约字段、过期判定、流句一致性、状态文件读写往返、提示词携带技能正文与真实路径。`scripts/verify-agent.sh` 八项断言：CLI 在包内、无文件退出码 3、应用每秒写文件、JSON 字段齐全、文本模式、快照新鲜、优雅退出后退出码 3 且文件被删。`ui-check.sh` 加第五类断言：安装视图渲染、OCR 可读、剪贴板里真的是提示词。打包验证加了一条包内 CLI 可运行。全部 PASS。
 
 成本记在 `docs/metric-validation.md`：状态文件实测 516 字节、每秒一次原子重写；CLI 稳定后单次 0.02 秒，首次 0.66 秒，差异归因于系统对首次执行新二进制的检查（推断）。
+
+公证走了三次才过。钥匙串里的 `quik-notary` 条目在 02:50 到 04:59 之间消失，系统日志无痕，Mac 没重启，原因查不到。用户重建了 App 专用密码和新 profile。第一次提交 `e0d5bf4a` Invalid，原因是有两份 CLI：xcodegen 对未声明 `embed: false` 的目标依赖默认嵌一份进 `Contents/Resources`，带的是调试签名。第二次 `1bf28a51` 仍 Invalid，剩下的那一份在 `Contents/Library`，因为 `codesign --deep` 只重签它认识的嵌套位置（Frameworks、PlugIns、XPCServices），不碰 Library 里的裸可执行文件。修法是打包脚本先显式签名 Library/quik，再签外层 bundle。第三次 `679f3ec8` Accepted，`spctl` 返回 Notarized Developer ID。本地 `codesign --verify --deep --strict` 与 `spctl` 都查不出嵌包签名问题，只有公证会查，这条限制记在这里。

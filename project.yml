@@ -24,9 +24,12 @@ targets:
         buildPhase: resources
     dependencies:
       # The CLI shares no code path with the app binary; a target dependency
-      # is enough to build it first. Do not embed it: Contents/MacOS/quik is
-      # the same path as the app executable on a case-insensitive volume.
+      # is enough to build it first. Embedding defaults to true and drops a
+      # debug-signed copy in Contents/Resources, so it stays off; the script
+      # phase below is the only copy, and Contents/MacOS/quik is the same
+      # path as the app executable on a case-insensitive volume.
       - target: QuikCLI
+        embed: false
     postBuildScripts:
       - name: Embed quik CLI
         script: |

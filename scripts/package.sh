@@ -42,8 +42,17 @@ DMG="$PKG_DIR/Quik-$VERSION.dmg"
 ZIP="$PKG_DIR/Quik-$VERSION.zip"
 
 if [ "$REAL_IDENTITY" = 1 ]; then
+  # codesign --deep re-signs only the nested locations it knows (Frameworks,
+  # PlugIns, XPCServices). The CLI sits in Contents/Library, so it needs an
+  # explicit Developer ID signature before the outer bundle seals over it.
+  if [ -f "$APP/Contents/Library/quik" ]; then
+    codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP/Contents/Library/quik"
+  fi
   codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP"
 else
+  if [ -f "$APP/Contents/Library/quik" ]; then
+    codesign --force --sign - "$APP/Contents/Library/quik"
+  fi
   codesign --force --deep --sign - "$APP"
 fi
 
