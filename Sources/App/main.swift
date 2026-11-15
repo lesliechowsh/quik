@@ -21,8 +21,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 预览注入只服务截图检查，不该往真实目录写文件。
         if preview == nil {
             DispatchQueue.global(qos: .utility).async {
-                AgentInstall.installSkill()
-                AgentInstall.installCommandLine()
+                switch ProcessInfo.processInfo.environment["QUIK_AGENT_ACTION"] {
+                case "install":
+                    AgentInstall.install()
+                    try? "install=1".write(toFile: "/tmp/quik-agent-action.txt", atomically: true, encoding: .utf8)
+                case "remove":
+                    AgentInstall.remove()
+                    try? "remove=1".write(toFile: "/tmp/quik-agent-action.txt", atomically: true, encoding: .utf8)
+                default:
+                    // 没主动装过就不写任何东西；装过则随应用更新刷新技能与命令。
+                    guard AgentInstall.skillState() != .absent else { return }
+                    AgentInstall.install()
+                }
             }
         }
         statusController = StatusItemController(preview: preview)

@@ -1,23 +1,53 @@
 #!/bin/bash
-# Checks the agent surface end to end: the status file appears while the app
-# runs, the bundled CLI reads it in both modes, and it reports no data after
-# the app quits.
+# Checks the agent surface end to end: a normal launch installs nothing, the
+# opt-in install and remove actions converge on disk, and the bundled CLI reads
+# the status file in both modes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="build/Build/Products/Release/Quik.app"
 CLI="$APP/Contents/Library/quik"
 STATUS="$HOME/Library/Application Support/Quik/status.json"
+SUPPORT="$HOME/Library/Application Support/Quik"
+SKILL_RESOURCE="$APP/Contents/Resources/quik-skill.md"
+ACTION=/tmp/quik-agent-action.txt
 JSON_OUT=/tmp/quik-agent-check/status.json
 fail=0
 
 QUIK_WAS_RUNNING=0
 pgrep -x Quik >/dev/null 2>&1 && QUIK_WAS_RUNNING=1
 
+# The script drives the install off and on again, so remember whether the user
+# had installed it. Leaving the machine in the default state is only correct
+# for someone who started there.
+RESTORE_INSTALL=0
+if [ -f "$HOME/.agents/skills/quik/SKILL.md" ] \
+  && [ -f "$HOME/.claude/skills/quik/SKILL.md" ] \
+  && [ -x "$HOME/.local/bin/quik" ]; then
+  RESTORE_INSTALL=1
+fi
+
+restore_install() {
+  [ "$RESTORE_INSTALL" = "1" ] || return 0
+  [ -x "$APP/Contents/Library/quik" ] || return 0
+  rm -f "$ACTION"
+  open -n --env QUIK_AGENT_ACTION=install "$APP" >/dev/null 2>&1 || true
+  for _ in $(seq 1 100); do
+    [ -f "$ACTION" ] && break
+    perl -e 'select(undef,undef,undef,0.1)'
+  done
+  rm -f "$ACTION"
+  pkill -x Quik 2>/dev/null || true
+}
+
 cleanup() {
   if [ "$QUIK_WAS_RUNNING" = "0" ]; then
     pkill -x Quik 2>/dev/null || true
   fi
+  rm -rf "$HOME/.agents/skills/quik" "$HOME/.claude/skills/quik"
+  rm -f "$HOME/.local/bin/quik"
+  restore_install
+  [ "$RESTORE_INSTALL" = "1" ] && echo "restored the install that was present before the run"
 }
 trap cleanup EXIT
 
@@ -28,7 +58,9 @@ echo "PASS cli exists in the app bundle"
 
 pkill -x Quik 2>/dev/null || true
 sleep 1
-rm -f "$STATUS"
+rm -rf "$HOME/.agents/skills/quik" "$HOME/.claude/skills/quik"
+rm -f "$HOME/.local/bin/quik"
+rm -f "$ACTION" "$STATUS"
 code=0
 "$CLI" --json >/dev/null 2>&1 || code=$?
 [ "$code" = "3" ] && echo "PASS missing status file exits 3" || { echo "FAIL missing file exit=$code"; fail=1; }
@@ -37,30 +69,12 @@ open -n "$APP"
 sleep 5
 [ -f "$STATUS" ] && echo "PASS app writes the status file" || { echo "FAIL status file missing"; fail=1; }
 
-if [ -x "$HOME/.local/bin/quik" ]; then
-  echo "PASS app installs the quik command into ~/.local/bin"
-  cmp -s "$HOME/.local/bin/quik" "$CLI" \
-    && echo "PASS installed command matches the bundle" \
-    || { echo "FAIL installed command differs from the bundle"; fail=1; }
+if [ ! -e "$HOME/.agents/skills/quik" ] \
+  && [ ! -e "$HOME/.claude/skills/quik" ] \
+  && [ ! -e "$HOME/.local/bin/quik" ]; then
+  echo "PASS default launch installs nothing"
 else
-  echo "FAIL ~/.local/bin/quik missing after launch"; fail=1
-fi
-
-# The skill follows the Agent Skills open standard: ~/.agents/skills is the
-# cross-agent user-level directory (Codex, Cursor, Cline, Zed, Warp, ...),
-# ~/.claude/skills is Claude Code's own. Both must match the bundled file.
-for dir in ".agents/skills/quik" ".claude/skills/quik"; do
-  if [ -f "$HOME/$dir/SKILL.md" ]; then
-    echo "PASS skill installed at ~/$dir"
-    cmp -s "$HOME/$dir/SKILL.md" "$APP/Contents/Resources/quik-skill.md" \
-      && echo "PASS ~/$dir skill matches the bundle" \
-      || { echo "FAIL ~/$dir skill differs from the bundle"; fail=1; }
-  else
-    echo "FAIL skill missing at ~/$dir"; fail=1
-  fi
-done
-if grep -q "/Users/" "$HOME/.agents/skills/quik/SKILL.md" 2>/dev/null; then
-  echo "FAIL installed skill carries machine paths"; fail=1
+  echo "FAIL default launch wrote into the home directory"; fail=1
 fi
 
 "$CLI" --json > "$JSON_OUT"
@@ -99,6 +113,74 @@ if [ "$QUIK_WAS_RUNNING" = "0" ]; then
   "$CLI" --json >/dev/null 2>&1 || code=$?
   [ "$code" = "3" ] && echo "PASS quit app exits 3" || { echo "FAIL quit exit=$code"; fail=1; }
   [ ! -f "$STATUS" ] && echo "PASS quit removes the status file" || { echo "FAIL status file survived quit"; fail=1; }
+fi
+
+# The install button is a SwiftUI control, so the app exposes the same code path
+# through QUIK_AGENT_ACTION for this script.
+pkill -x Quik 2>/dev/null || true
+sleep 1
+rm -f "$ACTION"
+open -n --env QUIK_AGENT_ACTION=install "$APP"
+for _ in $(seq 1 100); do
+  [ -f "$ACTION" ] && break
+  perl -e 'select(undef,undef,undef,0.1)'
+done
+[ "$(cat "$ACTION" 2>/dev/null)" = "install=1" ] \
+  && echo "PASS install action ran" \
+  || { echo "FAIL install action marker missing"; fail=1; }
+
+for dir in ".agents/skills/quik" ".claude/skills/quik"; do
+  if [ -f "$HOME/$dir/SKILL.md" ]; then
+    echo "PASS install writes ~/$dir"
+    cmp -s "$HOME/$dir/SKILL.md" "$SKILL_RESOURCE" \
+      && echo "PASS ~/$dir matches the bundled skill" \
+      || { echo "FAIL ~/$dir differs from the bundle"; fail=1; }
+  else
+    echo "FAIL skill missing at ~/$dir"; fail=1
+  fi
+done
+if [ -x "$HOME/.local/bin/quik" ]; then
+  echo "PASS install writes ~/.local/bin/quik"
+  cmp -s "$HOME/.local/bin/quik" "$CLI" \
+    && echo "PASS installed command matches the bundle" \
+    || { echo "FAIL installed command differs from the bundle"; fail=1; }
+else
+  echo "FAIL ~/.local/bin/quik missing after install"; fail=1
+fi
+
+pkill -x Quik 2>/dev/null || true
+sleep 1
+rm -f "$ACTION"
+open -n --env QUIK_AGENT_ACTION=remove "$APP"
+for _ in $(seq 1 100); do
+  [ -f "$ACTION" ] && break
+  perl -e 'select(undef,undef,undef,0.1)'
+done
+[ "$(cat "$ACTION" 2>/dev/null)" = "remove=1" ] \
+  && echo "PASS remove action ran" \
+  || { echo "FAIL remove action marker missing"; fail=1; }
+
+if [ ! -e "$HOME/.agents/skills/quik" ] \
+  && [ ! -e "$HOME/.claude/skills/quik" ] \
+  && [ ! -e "$HOME/.local/bin/quik" ]; then
+  echo "PASS remove deletes the skill and the command"
+else
+  echo "FAIL remove left something behind"; fail=1
+fi
+[ -d "$SUPPORT" ] \
+  && echo "PASS remove keeps the app data directory" \
+  || { echo "FAIL remove deleted the app data directory"; fail=1; }
+
+pkill -x Quik 2>/dev/null || true
+sleep 1
+if [ -e "$HOME/.agents/skills/quik" ] \
+  || [ -e "$HOME/.claude/skills/quik" ] \
+  || [ -e "$HOME/.local/bin/quik" ]; then
+  echo "FAIL remove left files behind at the end of the run"; fail=1
+elif [ "$RESTORE_INSTALL" = "1" ]; then
+  echo "PASS remove clears the install (the earlier install is restored on exit)"
+else
+  echo "PASS machine left in the default state"
 fi
 
 if [ "$fail" = "0" ]; then

@@ -89,28 +89,87 @@ final class StatusSnapshotTests: XCTestCase {
         XCTAssertFalse(skill.contains(".app"), "技能不得引用应用包内路径")
     }
 
-    func testSkillInstallsIntoStandardDirectories() throws {
+    func testSkillStateFollowsTheDisk() throws {
         let home = FileManager.default.temporaryDirectory
-            .appendingPathComponent("quik-skill-\(UUID().uuidString)")
-        XCTAssertTrue(AgentInstall.installSkill(home: home))
+            .appendingPathComponent("quik-state-\(UUID().uuidString)")
+        XCTAssertEqual(AgentInstall.skillState(home: home), .absent)
+
+        let skill = home
+            .appendingPathComponent(AgentInstall.skillLocations[0])
+            .appendingPathComponent("SKILL.md")
+        try FileManager.default.createDirectory(
+            at: skill.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("skill".utf8).write(to: skill)
+        XCTAssertEqual(AgentInstall.skillState(home: home), .partial, "只写一个目录说明装了一半")
+
+        XCTAssertTrue(AgentInstall.install(home: home, source: try fixtureCommand(in: home)))
+        XCTAssertEqual(AgentInstall.skillState(home: home), .installed, "再装一次补全缺的那一半")
+        try? FileManager.default.removeItem(at: home)
+    }
+
+    func testInstallWritesStandardLocationsAndCommandLine() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quik-install-\(UUID().uuidString)")
+        let source = try fixtureCommand(in: home)
+
+        XCTAssertTrue(AgentInstall.install(home: home, source: source))
         let bundled = try XCTUnwrap(AgentInstall.skillMarkdown)
         for location in AgentInstall.skillLocations {
             let file = home.appendingPathComponent(location).appendingPathComponent("SKILL.md")
             XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), bundled)
             XCTAssertFalse(try String(contentsOf: file, encoding: .utf8).contains("/Users/"))
         }
-        XCTAssertTrue(AgentInstall.skillIsInstalled(home: home))
-        XCTAssertTrue(AgentInstall.installSkill(home: home), "重复安装幂等")
+        let destination = home.appendingPathComponent(".local/bin/quik")
+        let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.uint16Value, 0o755)
+        XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: source))
+        XCTAssertEqual(AgentInstall.skillState(home: home), .installed)
+
+        XCTAssertTrue(AgentInstall.install(home: home, source: source), "重复安装幂等")
+        XCTAssertFalse(
+            AgentInstall.install(home: home, source: home.appendingPathComponent("missing")),
+            "来源缺失时报失败而不是崩溃"
+        )
+        try? FileManager.default.removeItem(at: home)
+    }
+
+    func testRemoveDeletesInstallButKeepsAppData() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quik-remove-\(UUID().uuidString)")
+        XCTAssertTrue(AgentInstall.install(home: home, source: try fixtureCommand(in: home)))
+        let support = home.appendingPathComponent("Library/Application Support/Quik")
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: support.appendingPathComponent("status.json"))
+
+        AgentInstall.remove(home: home)
+        for location in AgentInstall.skillLocations {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: home.appendingPathComponent(location).path),
+                "技能目录要删干净：\(location)"
+            )
+        }
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: home.appendingPathComponent(".local/bin/quik").path),
+            "命令行工具要删掉"
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: support.path),
+            "移除不能动应用自己的数据目录"
+        )
+        XCTAssertEqual(AgentInstall.skillState(home: home), .absent)
+
+        AgentInstall.remove(home: home) // 重复移除幂等，不崩
+        XCTAssertTrue(FileManager.default.fileExists(atPath: support.path))
         try? FileManager.default.removeItem(at: home)
     }
 
     func testUninstallRemovesEverythingQuikPlaced() throws {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("quik-uninstall-\(UUID().uuidString)")
-        XCTAssertTrue(AgentInstall.installSkill(home: home))
+        XCTAssertTrue(AgentInstall.install(home: home, source: try fixtureCommand(in: home)))
         let cli = home.appendingPathComponent(".local/bin/quik")
-        try FileManager.default.createDirectory(at: cli.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data("#!/bin/sh\n".utf8).write(to: cli)
         let support = home.appendingPathComponent("Library/Application Support/Quik")
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: support.appendingPathComponent("status.json"))
@@ -128,26 +187,11 @@ final class StatusSnapshotTests: XCTestCase {
         try? FileManager.default.removeItem(at: home)
     }
 
-    func testInstallCommandLineCopiesToolIntoHome() throws {
-        let home = FileManager.default.temporaryDirectory
-            .appendingPathComponent("quik-install-\(UUID().uuidString)")
+    private func fixtureCommand(in home: URL) throws -> URL {
         let source = home.appendingPathComponent("fixture-quik")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try Data("#!/bin/sh\necho quik-fixture\n".utf8).write(to: source)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source.path)
-
-        XCTAssertTrue(AgentInstall.installCommandLine(home: home, source: source))
-        let destination = home.appendingPathComponent(".local/bin/quik")
-        let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
-        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.uint16Value, 0o755)
-        XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: source))
-
-        XCTAssertTrue(AgentInstall.installCommandLine(home: home, source: source), "重复安装幂等")
-
-        XCTAssertFalse(
-            AgentInstall.installCommandLine(home: home, source: home.appendingPathComponent("missing")),
-            "来源缺失时报失败而不是崩溃"
-        )
-        try? FileManager.default.removeItem(at: home)
+        return source
     }
 }

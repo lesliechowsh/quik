@@ -7,13 +7,24 @@ struct PanelView: View {
     var onActivityMonitor: () -> Void
     var onToggleHUD: () -> Void
     var onToggleAdvanced: () -> Void
-    @State private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] == "1"
+    @State private var showingAgentInstall = PanelView.agentPreviewState != nil
+
+    private static var agentPreviewState: SkillState? {
+        switch ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] {
+        case "1": return .absent
+        case "installed": return .installed
+        default: return nil
+        }
+    }
 
     private var assessment: StallAssessment { store.assessment }
 
     var body: some View {
         if showingAgentInstall {
-            AgentInstallView(onBack: { showingAgentInstall = false })
+            AgentInstallView(
+                onBack: { showingAgentInstall = false },
+                previewState: PanelView.agentPreviewState
+            )
         } else {
             mainPanel
         }
@@ -164,7 +175,7 @@ struct PanelView: View {
                     .buttonStyle(.link)
                     .font(.caption)
                 if !store.advanced {
-                    Button("AI 助手") { showingAgentInstall = true }
+                    Button("安装到 AI 助手") { showingAgentInstall = true }
                         .buttonStyle(.link)
                         .font(.caption)
                 }
