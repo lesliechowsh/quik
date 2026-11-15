@@ -307,3 +307,15 @@ CLI 放弃 PATH 安装作为必选步骤。技能文件里写的是应用内的�
 于是删掉凭据文件、`.env.example`、API key 模板和 `package.sh` 里的 key 模式。`package.sh` 直接用 profile `quik-notary`，预检在 profile 缺失时于构建前退出并打印重建命令。`QUIK_SKIP_NOTARY=1` 保留给不公证的本地调试构建。
 
 上一节讲的 401 真因仍然是 `@env:`，与凭据放在哪无关。这条路线也不经过它。
+
+### 静态应用图标 0.2.3
+
+用户发现 Finder 里的 Quik 是系统默认图标。原因是包内只有动态绘制的程序坞瓦片，没有任何图标文件，`Info.plist` 里也没有 `CFBundleIconFile`。程序坞图标是运行后用 `ImageRenderer` 覆盖的，只影响运行中的程序坞，不影响 Finder 和 DMG。
+
+做法是补一个静态图标，语言与动态瓦片一致：石墨色圆角方块，中间一条白色脉冲线。不加文字，因为 16 点下文字必糊；不用状态色，因为静态图标不代表当前状态。几何固定为 1024 画布、824 内容区、186 圆角、80 线宽，全部写进 `scripts/make-icon.swift`，重跑就能产出 `Sources/Resources/Quik.icns`。每个尺寸单独绘制而不是从 1024 缩放，16 与 32 点更锐利。
+
+`project.yml` 增加 `CFBundleIconFile: Quik`。测试新增两条：包内有 icns 且尺寸覆盖 16 到 1024，以及从 icns 栅格化后中段像素是暗的，防止画成系统默认图标。
+
+验证有一处缺口。这台机器上 Quick Look 渲染任何 `.app` 都会挂住，系统自带的计算器也一样，所以没能用 `qlmanage` 生成 Finder 缩略图。包级契约（图标文件、plist 键、尺寸、像素）都有断言，Finder 的实际渲染留给肉眼确认。
+
+顺带修了一个一直存在的隐患：命令行目标的产品名是 `quik`，模块名默认跟着产品名走，在大小写不敏感的文件系统上和 App 的 `Quik` 模块撞名，测试偶尔报 `cannot load module 'quik' as 'Quik'`。给命令行目标显式设了 `PRODUCT_MODULE_NAME: QuikCLI`。
