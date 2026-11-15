@@ -6,8 +6,10 @@ cd "$(dirname "$0")/.."
 
 APP="build/Build/Products/Release/Quik.app"
 BUNDLE_ID="dev.quik.app"
-QUIK_WAS_RUNNING=0
-pgrep -x Quik >/dev/null 2>&1 && QUIK_WAS_RUNNING=1
+# Remember which bundle the user was running, not just that one was running:
+# reopening $APP here used to leave a second Quik running from the build folder.
+QUIK_RUNNING_FROM="$(pgrep -x Quik | head -n 1 | xargs -I{} ps -o command= -p {} 2>/dev/null \
+  | sed -n 's|/Contents/MacOS/Quik.*||p')"
 ADVANCED_WAS="$(defaults read "$BUNDLE_ID" advancedMode 2>/dev/null || echo 0)"
 [ "$ADVANCED_WAS" = "1" ] && ADVANCED_WAS=true || ADVANCED_WAS=false
 HUD_WAS="$(defaults read "$BUNDLE_ID" hudVisible 2>/dev/null || echo 1)"
@@ -130,5 +132,5 @@ fi
 echo "artifacts: $OUT"
 defaults write "$BUNDLE_ID" advancedMode -bool "$ADVANCED_WAS"
 defaults write "$BUNDLE_ID" hudVisible -bool "$HUD_WAS"
-if [ "$QUIK_WAS_RUNNING" = "1" ]; then open "$APP"; fi
+if [ -n "$QUIK_RUNNING_FROM" ]; then open "$QUIK_RUNNING_FROM"; fi
 exit "$fail"
