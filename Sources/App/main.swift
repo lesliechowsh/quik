@@ -18,6 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         mainTrace("didFinishLaunching")
         let preview = ProcessInfo.processInfo.environment["QUIK_PREVIEW"]
+        // 预览注入只服务截图检查，不该往真实目录写文件。
+        if preview == nil {
+            DispatchQueue.global(qos: .utility).async {
+                AgentInstall.installCommandLine()
+            }
+        }
         statusController = StatusItemController(preview: preview)
     }
 

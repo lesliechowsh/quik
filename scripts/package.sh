@@ -41,6 +41,11 @@ VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/
 DMG="$PKG_DIR/Quik-$VERSION.dmg"
 ZIP="$PKG_DIR/Quik-$VERSION.zip"
 
+# Defense in depth: no DWARF in shipped binaries, so machine paths can never
+# travel inside them even if a build setting changes later. Runs before
+# signing because any later change to the binary breaks the signature.
+strip -S "$APP/Contents/MacOS/Quik" "$APP/Contents/Library/quik"
+
 if [ "$REAL_IDENTITY" = 1 ]; then
   # codesign --deep re-signs only the nested locations it knows (Frameworks,
   # PlugIns, XPCServices). The CLI sits in Contents/Library, so it needs an

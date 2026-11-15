@@ -10,8 +10,10 @@ description: 检查这台 Mac 现在卡不卡、什么在拖慢系统。当用�
 ## 读取
 
 ```bash
-{{QUIK_CLI}} --json
+quik --json
 ```
+
+如果 `quik` 不在 PATH，改用 `~/.local/bin/quik --json`。两个都没有，说明 Quik 没在运行，告诉用户先打开 Quik。
 
 退出码即状态：0 流畅，1 有点卡，2 卡住了，3 没有数据（Quik 没在运行，或数据超过 5 秒没更新）。退出码 3 时告诉用户先打开 Quik。
 

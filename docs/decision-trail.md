@@ -247,3 +247,15 @@ CLI 放弃 PATH 安装作为必选步骤。技能文件里写的是应用内的�
 成本记在 `docs/metric-validation.md`：状态文件实测 516 字节、每秒一次原子重写；CLI 稳定后单次 0.02 秒，首次 0.66 秒，差异归因于系统对首次执行新二进制的检查（推断）。
 
 公证走了三次才过。钥匙串里的 `quik-notary` 条目在 02:50 到 04:59 之间消失，系统日志无痕，Mac 没重启，原因查不到。用户重建了 App 专用密码和新 profile。第一次提交 `e0d5bf4a` Invalid，原因是有两份 CLI：xcodegen 对未声明 `embed: false` 的目标依赖默认嵌一份进 `Contents/Resources`，带的是调试签名。第二次 `1bf28a51` 仍 Invalid，剩下的那一份在 `Contents/Library`，因为 `codesign --deep` 只重签它认识的嵌套位置（Frameworks、PlugIns、XPCServices），不碰 Library 里的裸可执行文件。修法是打包脚本先显式签名 Library/quik，再签外层 bundle。第三次 `679f3ec8` Accepted，`spctl` 返回 Notarized Developer ID。本地 `codesign --verify --deep --strict` 与 `spctl` 都查不出嵌包签名问题，只有公证会查，这条限制记在这里。
+
+### 提示词携带机器用户名与 0.2.1
+
+0.2.0 发布约一小时后用户指出：安装提示词里出现了 `bytedance`。定位：提示词把 `Bundle.main` 的绝对路径拼了进去，而开发构建从 `build/` 目录运行，路径就变成 `/Users/bytedance/...`。用户名 bytedance 是公司信息，不得出现在任何会离开这台机器的内容里，开发构建的输出也不例外。
+
+排查结论先记录：仓库源代码干净；v0.1.1 与 v0.2.0 已发布二进制经 `strings` 与 `dwarfdump --debug-info` 检查均不含该用户名；泄漏只存在于运行时生成的提示词，已发布产物本身不携带。
+
+修法上否决了"提示词引用应用包内技能文件路径"的方案：开发构建的应用路径本身就带用户名，怎么拼都会漏。落成三点。技能文件 `quik-skill.md` 改为静态内容，只引用 `quik` 与 `~/.local/bin/quik` 两个固定位置；命令行工具由应用启动时自动复制到 `~/.local/bin/quik`（幂等，覆盖安装，应用更新后命令跟着更新），这一步零操作；提示词只负责让 AI 助手保存技能文件，不引用任何应用包内路径。用户确认保留"点一下复制提示词、贴给 AI 助手"的流程。
+
+防复发：单元测试断言提示词与技能内容不含 `/Users/`、不含 `{{`、不含 `.app`；`ui-check.sh` 的剪贴板断言改为要求无机器路径；`package.sh` 在签名前 `strip -S` 两个二进制，DWARF 里的机器路径从此没有出口（strip 必须在签名前，签名后再改二进制会毁掉签名）。v0.2.0 的 release 与 tag 删除，由 0.2.1 替代。
+
+一条教训：运行时拼进提示词、剪贴板的字符串，和源代码、二进制一样都是发布面。检查泄漏要查四个地方，漏一处就白查。

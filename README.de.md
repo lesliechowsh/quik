@@ -46,9 +46,9 @@ Der `sample`-Bericht wird in ein temporäres Verzeichnis geschrieben und automat
 
 ## KI-Assistent
 
-Nach der Installation kann auch ein KI-Assistent (Claude Code, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten. Panel öffnen, auf „安装到 AI 助手“ (für den KI-Assistenten installieren) klicken, der Prompt wird automatisch kopiert und lässt sich in den Assistenten einfügen. Er installiert die Skill-Datei in sein eigenes Skill-Verzeichnis und bekommt ein `quik`-Kommandozeilenwerkzeug.
+Nach der Installation kann auch ein KI-Assistent (Claude Code, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten. Während Quik läuft, legt es das Kommandozeilenwerkzeug von selbst in `~/.local/bin/quik` ab; nichts zu tun. Dem Assistenten bringt man das bei, indem man im Panel auf „安装到 AI 助手“ (für den KI-Assistenten installieren) klickt; der Prompt wird automatisch kopiert und lässt sich einfügen. Der Prompt bettet die vollständige Skill-Datei ein, und der Assistent speichert sie in sein eigenes Skill-Verzeichnis. Der Prompt und die Skill-Datei verweisen nur auf `quik` und `~/.local/bin/quik` und enthalten keinerlei Pfade deiner Maschine; egal wohin man sie einfügt, gibt nichts über deine Verzeichnisstruktur preis. Einmal installiert, lebt es mit Quik weiter.
 
-Das Werkzeug liegt innerhalb der App unter `Quik.app/Contents/Library/quik` und braucht keine separate Installation. `quik` gibt eine lesbare Zusammenfassung aus, `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren.
+Das Werkzeug gibt mit `quik` eine lesbare Zusammenfassung aus, mit `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren. Wenn du das nicht willst, lösche den `quik`-Ordner im Skill-Verzeichnis des Assistenten und `~/.local/bin/quik`.
 
 ## Prüfung
 
@@ -76,13 +76,13 @@ scripts/verify-quit.sh
 # Paket-Schleife: hängt das DMG ein, prüft Architekturen, Signatur und das Ziel und startet es einmal
 scripts/verify-package.sh
 
-# Agenten-Schleife: Statusdatei, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
+# Agenten-Schleife: Statusdatei, Installation nach ~/.local/bin, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
 scripts/verify-agent.sh
 ```
 
 Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
 
-`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „安装到 AI 助手“ mit dem Prompt wirklich im Clipboard. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
+`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „安装到 AI 助手“ mit dem Prompt im Clipboard und ohne jeden Maschinenpfad. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.
 

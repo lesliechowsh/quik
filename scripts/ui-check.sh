@@ -120,10 +120,13 @@ check_agent_install() {
       fail=1
     fi
   done
-  if pbpaste | grep -q "name: quik" && pbpaste | grep -q "Contents/Library/quik"; then
-    echo "PASS agent install (view renders, prompt copied with frontmatter and cli path)"
+  if pbpaste | grep -q "name: quik" \
+     && pbpaste | grep -q "local/bin/quik" \
+     && ! pbpaste | grep -q "/Users/" \
+     && ! pbpaste | grep -q "Contents/Library"; then
+    echo "PASS agent install (view renders, prompt copied, no machine paths)"
   else
-    echo "FAIL agent install: clipboard does not hold the prompt"
+    echo "FAIL agent install: clipboard prompt missing or carries machine paths"
     missing=1
     fail=1
   fi

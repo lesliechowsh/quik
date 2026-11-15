@@ -37,6 +37,15 @@ open -n "$APP"
 sleep 5
 [ -f "$STATUS" ] && echo "PASS app writes the status file" || { echo "FAIL status file missing"; fail=1; }
 
+if [ -x "$HOME/.local/bin/quik" ]; then
+  echo "PASS app installs the quik command into ~/.local/bin"
+  cmp -s "$HOME/.local/bin/quik" "$CLI" \
+    && echo "PASS installed command matches the bundle" \
+    || { echo "FAIL installed command differs from the bundle"; fail=1; }
+else
+  echo "FAIL ~/.local/bin/quik missing after launch"; fail=1
+fi
+
 "$CLI" --json > "$JSON_OUT"
 python3 -I - "$JSON_OUT" <<'EOF' || fail=1
 import json, sys
