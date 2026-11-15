@@ -44,7 +44,7 @@ targets:
         CFBundleName: Quik
         CFBundleDisplayName: Quik
         CFBundleIconFile: Quik
-        CFBundleShortVersionString: "0.2.4"
+        CFBundleShortVersionString: "0.2.5"
         LSMinimumSystemVersion: "14.0"
     settings:
       base:
