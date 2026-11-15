@@ -46,7 +46,7 @@ scripts/run.sh
 
 ## AI 助手
 
-装好之后，AI 助手（Claude Code、Codex、Cursor 等）也能回答"现在电脑卡不卡"，这一步不需要任何人操作。Quik 遵循 Agent Skills 开放标准——一个技能就是一个带 SKILL.md 的文件夹，兼容的助手启动时自动从磁盘发现——启动时自动把监控技能写进两个标准技能目录：`~/.agents/skills/quik`（Codex、Cursor、Cline、Zed、Warp 等识别）和 `~/.claude/skills/quik`（Claude Code 识别），命令行工具放到 `~/.local/bin/quik`。技能文件只引用这几个固定位置，不含任何本机路径。打开助手直接问就行；面板里的"AI 助手"视图能看到装到了哪里。
+装好之后，AI 助手（Claude Code、Codex、Cursor 等）也能回答"现在电脑卡不卡"。这一步由你决定：普通模式面板底部点「安装到 AI 助手」，在打开的页面里点「安装」。Quik 遵循 Agent Skills 开放标准——一个技能就是一个带 SKILL.md 的文件夹，兼容的助手启动时自动从磁盘发现——把监控技能写进两个标准技能目录：`~/.agents/skills/quik`（Codex、Cursor、Cline、Zed、Warp 等识别）和 `~/.claude/skills/quik`（Claude Code 识别），命令行工具同时放到 `~/.local/bin/quik`。没点过安装之前，Quik 不会往你的主目录写任何文件。技能文件只引用这几个固定位置，不含任何本机路径。装过之后，Quik 升级会自动刷新技能和命令，不需要重装；同一个页面里点「移除」就一次删掉技能和命令，Quik 照常运行。
 
 命令行工具的 `quik` 输出人类可读摘要，`quik --json` 输出机器可读的 JSON，退出码直接表示状态：0 流畅，1 有点卡，2 卡住了，3 没有数据。应用每秒把评估结果原子写入 `~/Library/Application Support/Quik/status.json`，实测 516 字节；退出时删除，5 秒没更新按过期处理。技能文件教 AI 助手引用现成的中文结论、不要自己再跑 top 或采样。卸载不用手工找文件：右键点菜单栏图标选"卸载 Quik"，一次删掉两个技能目录里的 quik 技能、`~/.local/bin/quik` 和 `~/Library/Application Support/Quik`，然后退出；之后把应用拖进废纸篓就完成了。macOS 在应用被删后不会执行任何代码，所以清理必须在应用还活着时做。技能文件里写了同样的清理说明，对任何助手说"帮我卸载 Quik"也能清干净。
 
@@ -56,7 +56,7 @@ scripts/run.sh
 # 单元测试：判定、滞回、排名、显示稳定
 xcodebuild -project Quik.xcodeproj -scheme Quik -configuration Debug -derivedDataPath build test
 
-# 界面闭环：注入固定状态，截图真实面板，OCR 断言文本
+# 界面闭环：注入固定状态，截图真实面板，断言窗口在屏内且不是空白
 scripts/ui-check.sh
 
 # 度量闭环：受控 CPU 过载，验证探针与判定
@@ -76,17 +76,17 @@ scripts/verify-quit.sh
 # 安装包闭环：挂载 DMG，检查架构、签名与拖入目标，并启动一次
 scripts/verify-package.sh
 
-# Agent 闭环：状态文件、~/.local/bin 与两个技能目录的安装、命令行工具两种输出、过期与退出清理
+# Agent 闭环：默认启动不写任何文件、显式安装与移除、命令行工具两种输出、过期与退出清理
 scripts/verify-agent.sh
 ```
 
 维护者发版步骤见 `docs/distribution.md`。
 
-`scripts/ui-check.sh` 输出截图与 OCR 文本到 `/tmp/quik-ui`。它做五类断言：面板文本、面板与悬浮窗的窗口矩形落在屏幕内、程序坞图标文字不出界、两种模式各自渲染正确、"AI 助手"视图渲染且不把任何机器路径画上屏幕。任何断言失败会返回非零退出码。
+`scripts/ui-check.sh` 把截图写到 `/tmp/quik-ui`，做三类断言：面板与悬浮窗的窗口矩形落在屏幕内、每张截图不是空白窗口（按像素算墨迹比例，纯色图只有一种颜色）、程序坞图标文字不出界。界面文字不用 OCR 判定：小字 OCR 误报多，还曾经把面板截图误当成悬浮窗截图而"通过"。截图留在目录里直接看。任何断言失败会返回非零退出码。
 
 窗口位置单独断言，是因为按窗口 ID 截图只证明内容对，不证明它出现在屏幕上。早期版本的面板顶到屏幕外，内容截图完好，检查照样通过。
 
-图标检查读的是应用导出的 PNG，与程序坞实际绘制的是同一份 `ImageRenderer` 输出，断言正方形、文字像素不出边、文字高度占图标一半以上。高级模式另加两条数得出来的约束：分数与标签的竖向间隙不超过图标边长的 12%，标签底边距图标下沿至少 20 像素。单元测试还会渲染 100 分并用 Vision 识别，确认三位数没有被截断。
+图标检查读的是应用导出的 PNG，与程序坞实际绘制的是同一份 `ImageRenderer` 输出，断言正方形、文字像素不出边、文字高度占图标一半以上。高级模式另加两条数得出来的约束：分数与标签的竖向间隙不超过图标边长的 12%，标签底边距图标下沿至少 20 像素。单元测试渲染 100 分，按白色像素的横向跨度断言三位数没有被截断，同样不经过 OCR。
 
 ## 度量边界
 

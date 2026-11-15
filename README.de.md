@@ -46,7 +46,7 @@ Der `sample`-Bericht wird in ein temporäres Verzeichnis geschrieben und automat
 
 ## KI-Assistent
 
-Nach der Installation kann auch ein KI-Assistent (Claude Code, Codex, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten, ohne dass Sie etwas tun. Quik folgt dem offenen Agent-Skills-Standard — eine Skill ist ein Ordner mit einer `SKILL.md`, den kompatible Assistenten beim Start selbst finden — und legt während des Laufs die Überwachungs-Skill in den beiden Standardverzeichnissen ab: `~/.agents/skills/quik` (gelesen von Codex, Cursor, Cline, Zed, Warp u. a.) und `~/.claude/skills/quik` (gelesen von Claude Code), dazu das Kommandozeilenwerkzeug in `~/.local/bin/quik`. Die Skill verweist nur auf diese festen Orte und enthält keine Pfade Ihrer Maschine. Fragen Sie den Assistenten einfach; die Ansicht „AI 助手“ im Panel zeigt, wo alles liegt.
+Nach der Installation kann auch ein KI-Assistent (Claude Code, Codex, Cursor u. a.) die Frage „stockt der Rechner gerade“ beantworten. Ob installiert wird, entscheiden Sie: Klicken Sie im einfachen Modus unten im Panel auf „安装到 AI 助手“ und dann auf der geöffneten Seite auf „安装“. Quik folgt dem offenen Agent-Skills-Standard — eine Skill ist ein Ordner mit einer `SKILL.md`, den kompatible Assistenten beim Start selbst finden — und schreibt die Überwachungs-Skill in die beiden Standardverzeichnisse: `~/.agents/skills/quik` (gelesen von Codex, Cursor, Cline, Zed, Warp u. a.) und `~/.claude/skills/quik` (gelesen von Claude Code), dazu das Kommandozeilenwerkzeug in `~/.local/bin/quik`. Bis Sie installieren, schreibt Quik nichts in Ihr Home-Verzeichnis. Die Skill verweist nur auf diese festen Orte und enthält keine Pfade Ihrer Maschine. Nach einer Installation frischt ein Quik-Update Skill und Werkzeug auf, ohne Neuinstallation; dieselbe Seite bietet „移除“, das beides löscht und Quik weiterlaufen lässt.
 
 Das Werkzeug gibt mit `quik` eine lesbare Zusammenfassung aus, mit `quik --json` maschinenlesbares JSON, und der Exit-Code nennt das Urteil: 0 flüssig, 1 zäh, 2 stockend, 3 keine Daten. Jede Sekunde schreibt die App `~/Library/Application Support/Quik/status.json` atomar neu, gemessen mit 516 Bytes; beim Beenden wird die Datei gelöscht, Daten älter als 5 Sekunden gelten als veraltet. Die Skill-Datei bringt dem Assistenten bei, die fertige Zusammenfassung zu zitieren und nicht selbst top oder Sampling zu fahren. Deinstallieren erfordert keine Dateisuche: Rechtsklick auf das Menüleisten-Symbol und „卸载 Quik“ wählen, das die quik-Skill aus beiden Verzeichnissen, `~/.local/bin/quik` und `~/Library/Application Support/Quik` in einem Schritt löscht und sich beendet; danach ziehen Sie die App in den Papierkorb. macOS führt nach dem Löschen einer App keinen Code mehr aus, die Bereinigung muss also geschehen, während die App lebt. Die Skill-Datei trägt dieselben Anweisungen, daher klappt auch „hilf mir, Quik zu deinstallieren“ bei jedem Assistenten.
 
@@ -56,7 +56,7 @@ Das Werkzeug gibt mit `quik` eine lesbare Zusammenfassung aus, mit `quik --json`
 # Unit-Tests: Entscheidung, Hysterese, Rangliste, Anzeigestabilität
 xcodebuild -project Quik.xcodeproj -scheme Quik -configuration Debug -derivedDataPath build test
 
-# UI-Schleife: feste Zustände einspeisen, echtes Panel aufnehmen, Text per OCR prüfen
+# UI-Schleife: feste Zustände einspeisen, echtes Panel aufnehmen, prüfen dass es im Bildschirm liegt und nicht leer ist
 scripts/ui-check.sh
 
 # Messschleife: kontrollierte CPU-Überlast, prüft Sonde und Entscheidung
@@ -76,17 +76,17 @@ scripts/verify-quit.sh
 # Paket-Schleife: hängt das DMG ein, prüft Architekturen, Signatur und das Ziel und startet es einmal
 scripts/verify-package.sh
 
-# Agenten-Schleife: Statusdatei, Installation nach ~/.local/bin und in beide Skill-Verzeichnisse, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
+# Agenten-Schleife: ein Standardstart schreibt nichts, ausdrückliches Installieren und Entfernen, beide CLI-Ausgaben, Veraltung und Aufräumen beim Beenden
 scripts/verify-agent.sh
 ```
 
 Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
 
-`scripts/ui-check.sh` schreibt Screenshots und OCR-Text nach `/tmp/quik-ui`. Es prüft fünf Dinge: den Panel-Text, die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, den Dock-Symboltext innerhalb der Kachel, die korrekte Darstellung beider Modi und die Ansicht „AI 助手“ ohne jeden Maschinenpfad auf dem Bildschirm. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
+`scripts/ui-check.sh` schreibt Screenshots nach `/tmp/quik-ui` und prüft drei Dinge: die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, dass jede Aufnahme mehr als eine Farbe zeichnet statt ein leeres Fenster zu zeigen, und den Dock-Symboltext innerhalb der Kachel. Kein Text wird per OCR gelesen: bei kleiner Schrift lieferte es falsche Erfolge und hielt einmal die Panel-Aufnahme für die des schwebenden Fensters. Die Screenshots liegen zum Ansehen im Verzeichnis. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.
 
-Die Icon-Prüfung liest PNGs, die die App exportiert. Sie stammen aus derselben `ImageRenderer`-Ausgabe, die das Dock zeichnet. Geprüft werden eine quadratische Kachel, Textpixel ohne Berührung des Rands und Text höher als die halbe Kachel. Der erweiterte Modus ergänzt zwei messbare Bedingungen: der vertikale Abstand zwischen Score und Bezeichnung bleibt unter 12 % der Kachelseite, und die Unterkante der Bezeichnung liegt mindestens 20 Pixel über dem Kachelrand. Ein Unit-Test rendert außerdem den Score 100 und liest ihn mit Vision, sodass ein abgeschnittener dreistelliger Score den Build scheitern lässt.
+Die Icon-Prüfung liest PNGs, die die App exportiert. Sie stammen aus derselben `ImageRenderer`-Ausgabe, die das Dock zeichnet. Geprüft werden eine quadratische Kachel, Textpixel ohne Berührung des Rands und Text höher als die halbe Kachel. Der erweiterte Modus ergänzt zwei messbare Bedingungen: der vertikale Abstand zwischen Score und Bezeichnung bleibt unter 12 % der Kachelseite, und die Unterkante der Bezeichnung liegt mindestens 20 Pixel über dem Kachelrand. Ein Unit-Test rendert außerdem den Score 100 und misst die horizontale Ausdehnung seiner weißen Pixel, sodass ein abgeschnittener dreistelliger Score den Build ohne OCR scheitern lässt.
 
 ## Grenzen der Messung
 

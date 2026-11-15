@@ -46,7 +46,7 @@ The `sample` report is written to a temporary directory and opened automatically
 
 ## AI assistant
 
-Once installed, an AI assistant (Claude Code, Codex, Cursor, and others) can also answer "is the machine stalled right now", with no steps on your side. Quik follows the Agent Skills open standard — a skill is a folder with a `SKILL.md` that compatible assistants discover on startup — and while it runs it keeps the monitoring skill in the two standard skill directories: `~/.agents/skills/quik` (read by Codex, Cursor, Cline, Zed, Warp and others) and `~/.claude/skills/quik` (read by Claude Code), plus the command-line tool at `~/.local/bin/quik`. The skill references only these fixed locations and carries no machine paths. Just ask your assistant; the "AI 助手" view in the panel shows where everything was installed.
+Once installed, an AI assistant (Claude Code, Codex, Cursor, and others) can also answer "is the machine stalled right now". You decide whether to install: in plain mode, click "安装到 AI 助手" at the bottom of the panel, then click "安装" on the page that opens. Quik follows the Agent Skills open standard — a skill is a folder with a `SKILL.md` that compatible assistants discover on startup — and writes the monitoring skill into the two standard skill directories: `~/.agents/skills/quik` (read by Codex, Cursor, Cline, Zed, Warp and others) and `~/.claude/skills/quik` (read by Claude Code), plus the command-line tool at `~/.local/bin/quik`. Until you install, Quik writes nothing into your home directory. The skill references only these fixed locations and carries no machine paths. After an install, a Quik update refreshes the skill and the command, so there is nothing to reinstall; the same page has "移除", which deletes both and leaves Quik running.
 
 `quik` prints a human-readable summary, `quik --json` prints machine-readable JSON, and the exit code states the verdict: 0 fluid, 1 sluggish, 2 stalled, 3 no data. Every second the app atomically rewrites `~/Library/Application Support/Quik/status.json`, measured at 516 bytes; it is removed on quit, and data older than 5 seconds counts as stale. The skill file teaches the assistant to quote the ready-made summary and not to run top or sampling on its own. Uninstalling needs no file hunt: right-click the menu-bar icon and choose "卸载 Quik", which deletes the quik skill from both directories, `~/.local/bin/quik` and `~/Library/Application Support/Quik` in one step, then quits; drag the app to the Trash afterwards. macOS runs no code after an app is deleted, so the cleanup must happen while the app is alive. The skill file carries the same cleanup instructions, so asking any assistant to "uninstall Quik" works too.
 
@@ -56,7 +56,7 @@ Once installed, an AI assistant (Claude Code, Codex, Cursor, and others) can als
 # Unit tests: decision, hysteresis, ranking, display stability
 xcodebuild -project Quik.xcodeproj -scheme Quik -configuration Debug -derivedDataPath build test
 
-# UI loop: inject fixed states, screenshot the real panel, assert text with OCR
+# UI loop: inject fixed states, screenshot the real panel, assert it stays on screen and is not blank
 scripts/ui-check.sh
 
 # Measurement loop: controlled CPU overload, checks the probe and the decision
@@ -76,17 +76,17 @@ scripts/verify-quit.sh
 # Package loop: mounts the DMG, checks architectures, signing, and the drag target, then launches it once
 scripts/verify-package.sh
 
-# Agent loop: status file, installs into ~/.local/bin and both skill directories, both CLI outputs, staleness, and cleanup on quit
+# Agent loop: a default launch writes nothing, explicit install and remove, both CLI outputs, staleness, and cleanup on quit
 scripts/verify-agent.sh
 ```
 
 Maintainer release steps are in `docs/distribution.md`.
 
-`scripts/ui-check.sh` writes screenshots and OCR text to `/tmp/quik-ui`. It asserts five things: the panel text, the window rectangles of the panel and the floating window staying on screen, the Dock icon text staying inside the tile, both modes rendering correctly, and the "AI 助手" view rendering without painting any machine path on screen. Any failed assertion returns a non-zero exit code.
+`scripts/ui-check.sh` writes screenshots to `/tmp/quik-ui` and asserts three things: the window rectangles of the panel and the floating window staying on screen, every capture drawing more than one color instead of a blank window, and the Dock icon text staying inside the tile. It reads no text with OCR: OCR on small UI text produced false passes, and once reported a floating-window capture that was really the panel. The screenshots stay in the directory for a person to look at. Any failed assertion returns a non-zero exit code.
 
 Window position is asserted separately because a screenshot by window ID proves the content is right, not that the window is on screen. An early version put the panel above the top of the screen; its content screenshot looked fine and the check still passed.
 
-The icon check reads PNGs exported by the app, which come from the same `ImageRenderer` output the Dock draws. It asserts a square tile, text pixels not touching the edge, and text taller than half the tile. Advanced mode adds two measurable constraints: the vertical gap between score and label stays within 12% of the tile side, and the label's bottom edge sits at least 20 pixels above the tile bottom. A unit test also renders a score of 100 and reads it with Vision, so a truncated three-digit score fails the build.
+The icon check reads PNGs exported by the app, which come from the same `ImageRenderer` output the Dock draws. It asserts a square tile, text pixels not touching the edge, and text taller than half the tile. Advanced mode adds two measurable constraints: the vertical gap between score and label stays within 12% of the tile side, and the label's bottom edge sits at least 20 pixels above the tile bottom. A unit test also renders a score of 100 and measures the horizontal span of its white pixels, so a truncated three-digit score fails the build without any OCR.
 
 ## Measurement boundaries
 
