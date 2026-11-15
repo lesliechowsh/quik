@@ -24,7 +24,7 @@ QUIK_NOTARY_TEAM_ID=<Team ID，从证书的 OU 字段读>
 QUIK_NOTARY_PASSWORD=<App 专用密码>
 ```
 
-`package.sh` 启动就读取这个文件，缺失、不完整或凭据被拒都在构建前退出，不消耗构建时间。密码通过 `--password "@env:..."` 传给 `notarytool`，不出现在进程列表里。目录在仓库之外，`.gitignore` 另外挡了 `.env` 与 `*.env` 两道。
+`package.sh` 启动就读取这个文件，缺失、不完整或凭据被拒都在构建前退出，不消耗构建时间。密码以字面值通过 `--password` 传给 `notarytool`：它没有 `@env:` 这种引用方式（那是 `altool` 的功能），传 `@env:NAME` 会把字面字符串当密码，每次都是 401。代价是密码在公证请求期间会出现在本机的 `ps` 里。目录在仓库之外，`.gitignore` 另外挡了 `.env` 与 `*.env` 两道。
 
 仍然可用的旧方式：`QUIK_NOTARY_PROFILE=quik-notary` 走钥匙串 profile。两条路都保留，文件优先。
 

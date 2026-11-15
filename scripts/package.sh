@@ -22,17 +22,22 @@ if [ -f "$NOTARY_ENV" ]; then
   set +a
 fi
 NOTARY_MODE="none"
-if [ -n "${QUIK_NOTARY_APPLE_ID:-}" ] && [ -n "${QUIK_NOTARY_TEAM_ID:-}" ] && [ -n "${QUIK_NOTARY_PASSWORD:-}" ]; then
+if [ -n "${QUIK_NOTARY_KEY_PATH:-}" ] && [ -n "${QUIK_NOTARY_KEY_ID:-}" ] && [ -n "${QUIK_NOTARY_ISSUER:-}" ]; then
+  NOTARY_MODE="key"
+elif [ -n "${QUIK_NOTARY_APPLE_ID:-}" ] && [ -n "${QUIK_NOTARY_TEAM_ID:-}" ] && [ -n "${QUIK_NOTARY_PASSWORD:-}" ]; then
   NOTARY_MODE="env"
 elif [ -n "${QUIK_NOTARY_PROFILE:-}" ]; then
   NOTARY_MODE="profile"
 fi
 
-# @env: keeps the password out of the process list; notarytool reads the
-# variable itself.
+# "env" mode passes the password literally: notarytool has no @env: source,
+# unlike altool, and handing it "@env:NAME" makes every request 401. The cost
+# is that the password is visible in ps on this machine while the request runs.
 NOTARY_ARGS=()
-if [ "$NOTARY_MODE" = "env" ]; then
-  NOTARY_ARGS=(--apple-id "$QUIK_NOTARY_APPLE_ID" --team-id "$QUIK_NOTARY_TEAM_ID" --password "@env:QUIK_NOTARY_PASSWORD")
+if [ "$NOTARY_MODE" = "key" ]; then
+  NOTARY_ARGS=(--key "$QUIK_NOTARY_KEY_PATH" --key-id "$QUIK_NOTARY_KEY_ID" --issuer "$QUIK_NOTARY_ISSUER")
+elif [ "$NOTARY_MODE" = "env" ]; then
+  NOTARY_ARGS=(--apple-id "$QUIK_NOTARY_APPLE_ID" --team-id "$QUIK_NOTARY_TEAM_ID" --password "$QUIK_NOTARY_PASSWORD")
 elif [ "$NOTARY_MODE" = "profile" ]; then
   NOTARY_ARGS=(--keychain-profile "$QUIK_NOTARY_PROFILE")
 fi
@@ -50,7 +55,11 @@ trap cleanup EXIT
 # A credentials file that exists but is incomplete would silently ship an
 # unnotarized build, so treat it as an error rather than a no-op.
 if [ -f "$NOTARY_ENV" ] && [ "$NOTARY_MODE" = "none" ]; then
-  echo "$NOTARY_ENV exists but is incomplete; fill in QUIK_NOTARY_APPLE_ID and QUIK_NOTARY_PASSWORD" >&2
+  echo "$NOTARY_ENV exists but is incomplete; fill in QUIK_NOTARY_APPLE_ID and QUIK_NOTARY_PASSWORD, or the three API key values" >&2
+  exit 1
+fi
+if [ "$NOTARY_MODE" = "key" ] && [ ! -f "$QUIK_NOTARY_KEY_PATH" ]; then
+  echo "$QUIK_NOTARY_KEY_PATH does not exist" >&2
   exit 1
 fi
 
