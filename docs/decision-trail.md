@@ -361,3 +361,13 @@ CLI 放弃 PATH 安装作为必选步骤。技能文件里写的是应用内的�
 验证扩到 17 项。每个语言的面板、高级页、安装页都量墨迹留白和右上角控件的尺寸、位置；控件在五语言下分别是114、106、116、118、91 像素宽，位置固定，作为语言指纹。然后用 `QUIK_SWITCH_LANGUAGE` 在运行中把日语切成德语，断言控件和正文同时变成德语（墨迹 3.88% 到 4.75%）、偏好写入、重启后仍是德语。最后用 `-AppleLanguages "(ko)"` 启动，断言控件与英语版完全一致，回退成立。单元测试 41 条，`ui-check.sh` 与 `verify-hud.sh` 继续通过。
 
 有一处没验证：深色外观。这台机器上切换系统外观需要给终端授予「系统事件」自动化权限，本会话没有，用 `defaults` 写 `AppleInterfaceStyle` 也没生效。控件用的是 `Color.primary` 的透明度与系统背景色，理论上自适应，但没有截图证据，留作已知缺口。
+
+### 发布包里的本机路径（0.2.5）
+
+发布前按惯例扫二进制，`grep -a -o '/Users/'` 在 `Quik` 里数到 1936 次，`quik` CLI 里 52 次，每次都跟着本机用户名。之前的 `strings -a | grep` 一条也没报，因为它只扫 `__TEXT`，而命中在后面的段里；用 `grep -a -o` 并配合字节偏移看上下文，才发现是 `___profc_/Users/.../Sources/App/main.swift` 这种符号名。
+
+根因是 Xcode 在 target 级给 `ENABLE_CODE_COVERAGE` 和 `CLANG_COVERAGE_MAPPING` 的默认值优先于 project 级的显式设置。`project.yml` 里写了 NO，实际仍编进 `-profile-generate`，二进制的 `__llvm_prf_names` 段按绝对路径记录了每个源文件。`strip -S` 删不掉这个段，所以 `package.sh` 原有的「strip 后就没有机器路径」的注释是错的。
+
+修法是把两个开关写进 target 的 `settings.base`，并在 `package.sh` 的 strip 之后断言两个可执行文件的 `/Users/` 命中数为 0，非零就让打包失败。断言是这轮真正的产出：即使将来构建设置又变了，泄漏也到不了 DMG，而不是靠注释提醒。写断言时还踩了一次 `set -e` 加 `pipefail`：`grep` 无匹配返回 1，管道整体失败，脚本在断言处静默退出，补 `|| true` 后正常。
+
+验证：干净重建后编译参数里不再有 `-profile-*`；strip 后两个二进制 `/Users/` 与用户名均为 0；重新公证 Accepted（11b1cde4-40d7-46e4-aa19-f77a5a14fb15），staple 与 `spctl` 通过；`verify-package.sh` 七项全 PASS，挂载 DMG 复查版本 0.2.5、四个 `.lproj`、TeamIdentifier 仅 A747RQ7RTH；SHA256SUMS 两文件均 OK。DMG 从 2.6M 降到 1.3M，ZIP 从 1.2M 降到 960K，减少的就是插桩数据。
