@@ -24,6 +24,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private var restoreHUDAfterPanel = false
     private var suppressHUDRestore = false
     private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] != nil
+    private var panelAnchor: NSRect = .zero
     private let dockIcon = DockIconController()
 
     init(preview: String? = nil) {
@@ -174,8 +175,23 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             onToggleAdvanced: { [weak self] in self?.toggleAdvanced() },
             showingAgentInstall: showingAgentInstall,
             onShowAgentInstall: { [weak self] in self?.setAgentInstallVisible(true) },
-            onCloseAgentInstall: { [weak self] in self?.setAgentInstallVisible(false) }
+            onCloseAgentInstall: { [weak self] in self?.setAgentInstallVisible(false) },
+            onContentHeight: { [weak self] height in self?.fitPanel(to: height) }
         )
+    }
+
+    // NSPopover keeps the size it was given. Content that grows after opening
+    // (a tall translation, the first assessment, advanced mode) would be
+    // clipped at the bottom, so the view reports its ideal height and the
+    // popover follows, staying pinned to the same anchor.
+    private func fitPanel(to height: CGFloat) {
+        let size = NSSize(width: 400, height: max(ceil(height), 390))
+        guard abs(popover.contentSize.height - size.height) > 0.5 else { return }
+        popover.contentSize = size
+        popover.contentViewController?.preferredContentSize = size
+        if popover.isShown, let window = popover.contentViewController?.view.window {
+            positionPanel(window, near: panelAnchor)
+        }
     }
 
     private func setAgentInstallVisible(_ visible: Bool) {
@@ -379,6 +395,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             anchorRect = screenRect
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+        panelAnchor = anchorRect
         guard let window = popover.contentViewController?.view.window else {
             trace("showPopover: window nil")
             return

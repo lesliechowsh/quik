@@ -36,10 +36,10 @@ SIDE_POINTS=23
 MARGIN_POINTS=24
 
 check_view() {
-  local language="$1" view="$2" state="$3" extra_env="$4"
+  local language="$1" view="$2" state="$3" extra_env="$4" advanced="$5"
   pkill -x Quik 2>/dev/null || true
   rm -f /tmp/quik-panel-windowid.txt
-  defaults write "$BUNDLE_ID" advancedMode -bool false
+  defaults write "$BUNDLE_ID" advancedMode -bool "$advanced"
   defaults write "$BUNDLE_ID" hudVisible -bool false
 
   # The floating window is a child of the panel's window, so a window capture
@@ -118,8 +118,9 @@ check_view() {
 }
 
 for language in $LANGUAGES; do
-  check_view "$language" panel stalled ""
-  check_view "$language" agent stalled "--env QUIK_PREVIEW_AGENT=1"
+  check_view "$language" panel stalled "" false
+  check_view "$language" advanced stalled "" true
+  check_view "$language" agent stalled "--env QUIK_PREVIEW_AGENT=1" false
 done
 
 echo "artifacts: $OUT"

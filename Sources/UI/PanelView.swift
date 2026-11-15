@@ -1,5 +1,12 @@
 import SwiftUI
 
+private struct PanelHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct PanelView: View {
     @ObservedObject var store: QuikStore
     var onSample: (Culprit) -> Void
@@ -10,6 +17,7 @@ struct PanelView: View {
     var showingAgentInstall: Bool = PanelView.agentPreviewState != nil
     var onShowAgentInstall: () -> Void = {}
     var onCloseAgentInstall: () -> Void = {}
+    var onContentHeight: (CGFloat) -> Void = { _ in }
 
     private static var agentPreviewState: SkillState? {
         switch ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] {
@@ -21,15 +29,30 @@ struct PanelView: View {
 
     private var assessment: StallAssessment { store.assessment }
 
+    // The panel's height follows its content, and the content changes after the
+    // popover opens: the first assessment arrives, advanced mode adds a section,
+    // a longer translation wraps to another line. Probing the hosting view once
+    // at build time froze the height at the empty state and clipped the footer.
+    // fixedSize reports the ideal height instead of the frame the popover
+    // happens to have, and the geometry reader hands it to the controller.
     var body: some View {
-        if showingAgentInstall {
-            AgentInstallView(
-                onBack: onCloseAgentInstall,
-                previewState: PanelView.agentPreviewState
-            )
-        } else {
-            mainPanel
+        Group {
+            if showingAgentInstall {
+                AgentInstallView(
+                    onBack: onCloseAgentInstall,
+                    previewState: PanelView.agentPreviewState
+                )
+            } else {
+                mainPanel
+            }
         }
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(PanelHeightKey.self, perform: onContentHeight)
     }
 
     private var mainPanel: some View {
