@@ -97,12 +97,12 @@ final class HUDController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        let open = NSMenuItem(title: "打开面板", action: #selector(openPanelAction), keyEquivalent: "")
+        let open = NSMenuItem(title: Copy.openPanel(), action: #selector(openPanelAction), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
         menu.addItem(.separator())
         let toggle = NSMenuItem(
-            title: store.hudVisible ? "隐藏悬浮窗" : "显示悬浮窗",
+            title: store.hudVisible ? Copy.hideHUD() : Copy.showHUD(),
             action: #selector(toggleVisibilityAction),
             keyEquivalent: ""
         )
@@ -174,15 +174,15 @@ struct HUDView: View {
 
     private var detail: String {
         if assessment.level != .fluid, let culprit = assessment.headlineCulprit {
-            let role = culprit.app?.role.map { " · \($0)" } ?? ""
+            let role = culprit.app?.role.map { " · \(Copy.processRole($0))" } ?? ""
             if store.advanced {
-                return "\(culprit.displayName)\(role) · \(culprit.reason)"
+                return "\(culprit.displayName)\(role) · \(Copy.culpritReason(culprit.reason))"
             }
             return "\(culprit.displayName)\(role)"
         }
         return store.advanced
-            ? "CPU \(Int(assessment.cpuBusy * 100))% · 延迟 \(Int(assessment.schedulerJankMs.rounded())) ms"
-            : "不需要处理"
+            ? Copy.hudCPU(Int((assessment.cpuBusy * 100).rounded()), lagMs: Int(assessment.schedulerJankMs.rounded()))
+            : Copy.nothingToHandle()
     }
 
     var body: some View {
@@ -191,9 +191,10 @@ struct HUDView: View {
                 .fill(accent)
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.advanced ? "\(assessment.score)  \(assessment.level.label)" : assessment.level.label)
+                Text(store.advanced ? "\(assessment.score)  \(Copy.level(assessment.level))" : Copy.level(assessment.level))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .lineLimit(1)
                 Text(detail)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)

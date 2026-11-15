@@ -55,6 +55,7 @@ targets:
     type: tool
     platform: macOS
     sources:
+      - path: Sources/Core/Copy.swift
       - path: Sources/Core/StallAssessment.swift
       - path: Sources/Core/StatusSnapshot.swift
       - path: Sources/CLI/main.swift

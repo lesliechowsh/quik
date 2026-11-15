@@ -4,7 +4,7 @@
 
 Un moniteur de blocages macOS qui vit dans la barre des menus. Il répond à deux questions : le système est-il bloqué maintenant, et qu'est-ce qui le cause.
 
-Swift natif, aucune dépendance tierce. Le coût mesuré en régime stable est de 0,8 % d'un cœur (0,07 % de 12 cœurs), pour environ 25 Mo de mémoire résidente. La méthode se trouve dans `docs/metric-validation.md`. L'interface de l'application est actuellement en chinois.
+Swift natif, aucune dépendance tierce. Le coût mesuré en régime stable est de 0,8 % d'un cœur (0,07 % de 12 cœurs), pour environ 25 Mo de mémoire résidente. La méthode se trouve dans `docs/metric-validation.md`. L'interface suit la langue du système et existe en chinois simplifié, anglais, allemand, français et japonais.
 
 ## Installation
 
@@ -62,6 +62,9 @@ scripts/ui-check.sh
 # Boucle de mesure : surcharge CPU contrôlée, vérifie la sonde et la décision
 # Mesure des oscillations : cycles de 6 s à pleine charge / 6 s au repos, compte les changements d'état et de classement (scripts/flap-check.sh)
 scripts/verify-experience.sh
+
+# Langues : lance la vraie application une fois par langue d'interface, vérifie que le panneau et la page d'installation gardent leurs marges
+scripts/verify-languages.sh
 ```
 
 ```bash
@@ -83,6 +86,8 @@ scripts/verify-agent.sh
 Les étapes de publication sont dans `docs/distribution.md`.
 
 `scripts/ui-check.sh` écrit les captures dans `/tmp/quik-ui` et vérifie trois choses : les rectangles du panneau et de la fenêtre flottante restant à l'écran, chaque capture contenant plus d'une couleur plutôt qu'une fenêtre vide, et le texte de l'icône du Dock restant dans la tuile. Aucun texte n'est lu par OCR : sur du petit texte il produisait de faux succès, et une fois a pris la capture du panneau pour celle de la fenêtre flottante. Les captures restent dans le dossier pour être regardées. Toute assertion en échec renvoie un code de sortie non nul.
+
+`scripts/verify-languages.sh` réutilise cette méthode de capture et d'encre et lance la vraie application une fois par langue d'interface. Il exige au moins 24 points de marge sur chaque côté du panneau et de la page d'installation. Cela prouve que la traduction ne déborde pas et n'est pas rognée au bord de la fenêtre ; la qualité de la formulation se juge sur les captures dans `/tmp/quik-ui`.
 
 La position de la fenêtre est vérifiée séparément, car une capture par identifiant de fenêtre prouve que le contenu est bon, pas que la fenêtre est à l'écran. Une première version plaçait le panneau au-dessus du haut de l'écran ; la capture du contenu était parfaite et le contrôle passait quand même.
 

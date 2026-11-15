@@ -4,7 +4,7 @@
 
 A macOS stall monitor that lives in the menu bar. It answers two questions: is the system stalling right now, and what is causing it.
 
-Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of one core (0.07% of 12 cores), with about 25 MB resident. The method is in `docs/metric-validation.md`. The app interface is currently in Chinese.
+Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of one core (0.07% of 12 cores), with about 25 MB resident. The method is in `docs/metric-validation.md`. The interface follows the system language and ships in Simplified Chinese, English, German, French, and Japanese.
 
 ## Install
 
@@ -62,6 +62,9 @@ scripts/ui-check.sh
 # Measurement loop: controlled CPU overload, checks the probe and the decision
 # Flapping measurement: 6 s full load / 6 s idle cycles, counts state and ranking changes (scripts/flap-check.sh)
 scripts/verify-experience.sh
+
+# Languages: launch the real app once per interface language, assert panel and install page text stays clear of the edges
+scripts/verify-languages.sh
 ```
 
 ```bash
@@ -83,6 +86,8 @@ scripts/verify-agent.sh
 Maintainer release steps are in `docs/distribution.md`.
 
 `scripts/ui-check.sh` writes screenshots to `/tmp/quik-ui` and asserts three things: the window rectangles of the panel and the floating window staying on screen, every capture drawing more than one color instead of a blank window, and the Dock icon text staying inside the tile. It reads no text with OCR: OCR on small UI text produced false passes, and once reported a floating-window capture that was really the panel. The screenshots stay in the directory for a person to look at. Any failed assertion returns a non-zero exit code.
+
+`scripts/verify-languages.sh` reuses that capture and ink method and launches the real app once per interface language, asserting at least 24 points of clearance on every side of the panel and install page. That proves the copy is not overflowing or clipped at the window edge; whether the wording reads well still needs the screenshots in `/tmp/quik-ui`.
 
 Window position is asserted separately because a screenshot by window ID proves the content is right, not that the window is on screen. An early version put the panel above the top of the screen; its content screenshot looked fine and the check still passed.
 

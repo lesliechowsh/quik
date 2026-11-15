@@ -43,7 +43,7 @@ final class ScoreMapTests: XCTestCase {
         var lines: [String] = []
         func row(_ name: String, _ d: SystemDelta) {
             let (score, level) = settle(d)
-            lines.append(String(format: "%-42@ %3d  %@", name as NSString, score, level.label))
+            lines.append(String(format: "%-42@ %3d  %@", name as NSString, score, Copy.level(level, .base)))
         }
 
         for busy in [0.5, 0.65, 0.75, 0.85, 0.95, 1.0] {

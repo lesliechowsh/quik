@@ -119,54 +119,56 @@ struct AgentInstallView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("让 AI 助手帮你盯着电脑")
+            Text(Copy.agentTitle())
                 .font(.system(size: 26, weight: .bold))
-            Text("装好之后，你的 AI 助手能读到 Quik 的实时数据。直接问它「现在电脑卡不卡」，它会替你回答。")
+                .fixedSize(horizontal: false, vertical: true)
+            Text(Copy.agentIntro())
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 5) {
-                locationRow("~/.agents/skills/quik", note: "Codex、Cursor、Cline、Zed 等")
-                locationRow("~/.claude/skills/quik", note: "Claude Code")
+                locationRow("~/.agents/skills/quik", note: Copy.agentNoteCompatible())
+                locationRow("~/.claude/skills/quik", note: Copy.agentNoteClaude())
             }
             HStack(spacing: 6) {
                 Image(systemName: state == .installed ? "checkmark.circle.fill" : "circle.dashed")
                     .foregroundStyle(state == .installed ? Color.green : Color.secondary)
                 Text(statusText)
                     .font(.callout.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            HStack(spacing: 8) {
-                Button(state == .installed ? "重新安装" : "安装") {
+            FlowLayout(spacing: 8) {
+                Button(state == .installed ? Copy.reinstall() : Copy.install()) {
                     AgentInstall.install()
                     refresh()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 if state != .absent {
-                    Button("移除") {
+                    Button(Copy.remove()) {
                         AgentInstall.remove()
                         refresh()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                 }
-                Spacer(minLength: 0)
             }
-            Text("命令行工具会一起放到 ~/.local/bin/quik，别的地方不写文件。移除会把技能和命令一起删掉。")
+            Text(Copy.agentCLIHint())
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             HStack {
-                Button("返回", action: onBack)
+                Button(Copy.back(), action: onBack)
                     .buttonStyle(.link)
                     .font(.caption)
                 Spacer()
             }
         }
         .padding(16)
-        .frame(width: 400, height: 390, alignment: .top)
+        .frame(width: 400, alignment: .top)
+        .frame(minHeight: 390, alignment: .top)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             guard previewState == nil else { return }
@@ -176,9 +178,9 @@ struct AgentInstallView: View {
 
     private var statusText: String {
         switch state {
-        case .absent: return "还没安装"
-        case .partial: return "只装了一半，点安装补全"
-        case .installed: return "已安装，随 Quik 常驻"
+        case .absent: return Copy.agentAbsent()
+        case .partial: return Copy.agentPartial()
+        case .installed: return Copy.agentInstalled()
         }
     }
 

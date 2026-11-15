@@ -4,7 +4,7 @@
 
 一个常驻菜单栏的 macOS 卡顿监控工具。它回答两个问题：现在卡不卡，是谁导致的。
 
-原生 Swift，无第三方依赖。稳态开销实测 0.8% 单核（12 核折合 0.07%），常驻内存约 25 MB。测量方法见 `docs/metric-validation.md`。
+原生 Swift，无第三方依赖。稳态开销实测 0.8% 单核（12 核折合 0.07%），常驻内存约 25 MB。测量方法见 `docs/metric-validation.md`。界面跟随系统语言，提供简体中文、English、Deutsch、Français、日本語。
 
 ## 安装
 
@@ -62,6 +62,9 @@ scripts/ui-check.sh
 # 度量闭环：受控 CPU 过载，验证探针与判定
 # 抖动测量：6 秒满载 / 6 秒空闲循环，统计状态与榜单变化次数（scripts/flap-check.sh）
 scripts/verify-experience.sh
+
+# 多语言界面：五种语言各启动一次真实应用，断言面板与安装页的文字不贴边
+scripts/verify-languages.sh
 ```
 
 ```bash
@@ -83,6 +86,8 @@ scripts/verify-agent.sh
 维护者发版步骤见 `docs/distribution.md`。
 
 `scripts/ui-check.sh` 把截图写到 `/tmp/quik-ui`，做三类断言：面板与悬浮窗的窗口矩形落在屏幕内、每张截图不是空白窗口（按像素算墨迹比例，纯色图只有一种颜色）、程序坞图标文字不出界。界面文字不用 OCR 判定：小字 OCR 误报多，还曾经把面板截图误当成悬浮窗截图而"通过"。截图留在目录里直接看。任何断言失败会返回非零退出码。
+
+`scripts/verify-languages.sh` 用同一套截图与墨迹方法，对简体中文、English、Deutsch、Français、日本語各启动一次真实应用，断言面板页和安装页的墨迹四边留白不少于 24 点。这证明译文没有溢出或被窗口边缘裁切；译文是否通顺仍要看 `/tmp/quik-ui` 里的截图。
 
 窗口位置单独断言，是因为按窗口 ID 截图只证明内容对，不证明它出现在屏幕上。早期版本的面板顶到屏幕外，内容截图完好，检查照样通过。
 

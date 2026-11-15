@@ -56,6 +56,8 @@ struct DockIconView: View {
 
     let assessment: StallAssessment
     var advanced = true
+    /// Tests render each language by passing its label in.
+    var label: String? = nil
 
     private var scoreText: String { "\(assessment.score)" }
 
@@ -65,6 +67,9 @@ struct DockIconView: View {
     // keeps the gap to the label at 28px in both cases (scripts/icon-check.swift).
     private var scoreFontSize: CGFloat { scoreText.count >= 3 ? 52 : 70 }
     private var scoreOffset: CGFloat { scoreText.count >= 3 ? -11 : -18 }
+    /// The Dock tile keeps short words so long translations do not shrink
+    /// below the point where the state is readable at icon size.
+    private var tileLabel: String { label ?? Copy.dockLevel(assessment.level) }
 
     private var colors: [Color] {
         switch assessment.level {
@@ -86,19 +91,19 @@ struct DockIconView: View {
                     .fixedSize()
                     .foregroundStyle(.white)
                     .offset(y: scoreOffset)
-                Text(assessment.level.label)
+                Text(tileLabel)
                     .font(.system(size: 34, weight: .semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.5)
                     .frame(width: 88)
                     .foregroundStyle(.white.opacity(0.94))
                     .offset(y: 35)
             } else {
                 VStack(spacing: 2) {
-                    Text(assessment.level.label)
+                    Text(tileLabel)
                         .font(.system(size: 58, weight: .bold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                        .minimumScaleFactor(0.4)
                         .frame(width: DockIconView.side - 44)
                         .foregroundStyle(.white)
                     if let culprit = assessment.headlineCulprit, assessment.level != .fluid {

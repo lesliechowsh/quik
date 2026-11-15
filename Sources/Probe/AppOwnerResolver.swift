@@ -51,7 +51,7 @@ enum AppOwnerResolver {
         return AppIdentity(name: processName, bundlePath: nil, role: workingDirectoryRole(of: pid))
     }
 
-    private static func workingDirectoryRole(of pid: pid_t) -> String? {
+    private static func workingDirectoryRole(of pid: pid_t) -> ProcessRole? {
         var info = proc_vnodepathinfo()
         let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
         guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
@@ -60,7 +60,7 @@ enum AppOwnerResolver {
         }
         let folder = URL(fileURLWithPath: path).lastPathComponent
         guard !folder.isEmpty, folder != "/", folder != NSUserName() else { return nil }
-        return "在 \(folder) 文件夹里运行"
+        return .workingDirectory(folder)
     }
 
     private static func appBundle(inPath path: String) -> String? {
@@ -74,32 +74,12 @@ enum AppOwnerResolver {
         return String(cString: buffer)
     }
 
-    private static func role(for processName: String) -> String? {
-        if processName.contains("Helper (Renderer)") { return "页面渲染" }
-        if processName.contains("Helper (GPU)") { return "图形处理" }
-        if processName.contains("Helper (Plugin)") { return "插件" }
-        if processName.contains("Helper") { return "后台进程" }
-        if processName.contains("WebContent") { return "网页内容" }
-        return nil
+    private static func role(for processName: String) -> ProcessRole? {
+        Copy.helperRole(processName)
     }
 
     private static func systemName(for processName: String) -> String? {
-        switch true {
-        case processName.hasPrefix("mdworker"), processName.hasPrefix("mds"):
-            return "聚焦搜索"
-        case processName.hasPrefix("kernel_task"):
-            return "系统内核"
-        case processName.hasPrefix("WindowServer"):
-            return "系统画面"
-        case processName.hasPrefix("backupd"):
-            return "时间机器"
-        case processName.hasPrefix("coreaudiod"):
-            return "系统声音"
-        case processName.hasPrefix("photoanalysisd"):
-            return "照片分析"
-        default:
-            return nil
-        }
+        Copy.systemProcessName(processName)
     }
 
     private static func name(of pid: pid_t) -> String {

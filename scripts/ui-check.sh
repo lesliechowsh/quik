@@ -8,8 +8,10 @@ APP="build/Build/Products/Release/Quik.app"
 BUNDLE_ID="dev.quik.app"
 # Remember which bundle the user was running, not just that one was running:
 # reopening $APP here used to leave a second Quik running from the build folder.
+# pgrep exits 1 when nothing is running, and with pipefail that would end the
+# script before the first check when the user simply quit the app.
 QUIK_RUNNING_FROM="$(pgrep -x Quik | head -n 1 | xargs -I{} ps -o command= -p {} 2>/dev/null \
-  | sed -n 's|/Contents/MacOS/Quik.*||p')"
+  | sed -n 's|/Contents/MacOS/Quik.*||p' || true)"
 ADVANCED_WAS="$(defaults read "$BUNDLE_ID" advancedMode 2>/dev/null || echo 0)"
 [ "$ADVANCED_WAS" = "1" ] && ADVANCED_WAS=true || ADVANCED_WAS=false
 HUD_WAS="$(defaults read "$BUNDLE_ID" hudVisible 2>/dev/null || echo 1)"

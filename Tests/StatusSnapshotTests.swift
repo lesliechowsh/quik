@@ -9,15 +9,15 @@ final class StatusSnapshotTests: XCTestCase {
             level: .sluggish,
             stableCause: .cpu,
             causes: [
-                CauseEvidence(kind: .cpu, contribution: 52, headline: "CPU 忙", detail: "12 核用掉 9 核"),
-                CauseEvidence(kind: .disk, contribution: 18, headline: "磁盘忙", detail: "写入 120 MB/s")
+                CauseEvidence(kind: .cpu, contribution: 52, metrics: .cpu(busyPercent: 90, busyCores: 9, cores: 12)),
+                CauseEvidence(kind: .disk, contribution: 18, metrics: .disk(busyPercent: 60, readBytesPerSecond: 15_728_640, writeBytesPerSecond: 1_048_576))
             ],
             culprits: [
                 Culprit(
                     pid: 4321, name: "Chrome Helper (Renderer)", attribution: .measured,
                     cpuOneCore: 1.234, diskBytesPerSecond: 3_145_728,
-                    footprintBytes: 512 * 1_048_576, score: 64, reason: "CPU 1.2 核",
-                    app: AppIdentity(name: "Chrome", bundlePath: "/Applications/Chrome.app", role: "页面渲染")
+                    footprintBytes: 512 * 1_048_576, score: 64, reason: .cpuCores(1.2),
+                    app: AppIdentity(name: "Chrome", bundlePath: "/Applications/Chrome.app", role: .pageRendering)
                 )
             ],
             cpuBusy: 0.9, cpuCores: 12, memoryPressure: 2,
@@ -36,7 +36,7 @@ final class StatusSnapshotTests: XCTestCase {
         XCTAssertTrue(text.contains("\"level\" : \"sluggish\""))
         XCTAssertTrue(text.contains("\"memoryPressure\" : \"warning\""))
         XCTAssertTrue(text.contains("\"thermal\" : \"fair\""))
-        XCTAssertTrue(text.contains("\"role\" : \"页面渲染\""))
+        XCTAssertTrue(text.contains("\"role\" : \"Page rendering\""))
 
         let decoded = try XCTUnwrap(StatusSnapshot.decode(data))
         XCTAssertEqual(decoded, snapshot)
@@ -59,9 +59,9 @@ final class StatusSnapshotTests: XCTestCase {
 
     func testFluidSummaryComesFromOnePlace() {
         let snapshot = StatusSnapshot(assessment: .idle(), appVersion: "0")
-        XCTAssertEqual(snapshot.summary, "现在用起来是流畅的，不需要做什么。")
+        XCTAssertEqual(snapshot.summary, "It runs smoothly right now. Nothing to do.")
         XCTAssertEqual(snapshot.level, "fluid")
-        XCTAssertEqual(snapshot.levelLabel, "流畅")
+        XCTAssertEqual(snapshot.levelLabel, "Fluid")
     }
 
     func testStatusFileRoundTrip() throws {

@@ -138,11 +138,11 @@ final class StallEvaluatorTests: XCTestCase {
         XCTAssertEqual(assessment.culprits.first?.displayName, "Slack Helper (Renderer)")
 
         let named = assessment.attaching([
-            42: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: "页面渲染")
+            42: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering)
         ])
         XCTAssertEqual(named.culprits.first?.displayName, "Slack")
-        XCTAssertEqual(named.culprits.first?.app?.role, "页面渲染")
-        XCTAssertTrue(named.menuTitle(advanced: true).hasPrefix("Slack"))
+        XCTAssertEqual(named.culprits.first?.app?.role, .pageRendering)
+        XCTAssertTrue(Copy.menuTitle(named, advanced: true, .base).hasPrefix("Slack"))
     }
 
     func testDiskWriteSurfacesAsCause() {

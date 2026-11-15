@@ -183,40 +183,51 @@ struct StallEvaluator: Sendable {
         if cpu > 0 {
             out.append(CauseEvidence(
                 kind: .cpu, contribution: cpu,
-                headline: "CPU \(Int((delta.cpuBusy * 100).rounded()))%",
-                detail: "\(delta.cpuCores) 个核心里有 \(Int((delta.cpuBusy * Double(delta.cpuCores)).rounded())) 个在忙"
+                metrics: .cpu(
+                    busyPercent: Int((delta.cpuBusy * 100).rounded()),
+                    busyCores: Int((delta.cpuBusy * Double(delta.cpuCores)).rounded()),
+                    cores: delta.cpuCores
+                )
             ))
         }
         let mem = memoryContribution(delta)
         if mem > 0 {
             out.append(CauseEvidence(
                 kind: .memory, contribution: mem,
-                headline: memoryHeadline(delta),
-                detail: memoryDetail(delta)
+                metrics: .memory(
+                    pressure: delta.memoryPressure,
+                    compressedGB: Double(delta.compressorBytes) / 1_073_741_824,
+                    swapUsedMB: Double(delta.swapUsedBytes) / 1_048_576,
+                    paging: delta.swapDeltaBytesPerSecond > 1_048_576
+                )
             ))
         }
         let disk = diskContribution(delta)
         if disk > 0 {
             out.append(CauseEvidence(
                 kind: .disk, contribution: disk,
-                headline: "硬盘很忙（\(Int((delta.diskBusy * 100).rounded()))%）",
-                detail: "每秒读 \(formatRate(delta.diskReadBytesPerSecond))、写 \(formatRate(delta.diskWriteBytesPerSecond))"
+                metrics: .disk(
+                    busyPercent: Int((delta.diskBusy * 100).rounded()),
+                    readBytesPerSecond: delta.diskReadBytesPerSecond,
+                    writeBytesPerSecond: delta.diskWriteBytesPerSecond
+                )
             ))
         }
         let sched = schedulingContribution(delta)
         if sched > 0 {
             out.append(CauseEvidence(
                 kind: .scheduling, contribution: sched,
-                headline: "响应延迟 \(Int(delta.schedulerJankMs.rounded())) ms",
-                detail: "系统晚了 \(Int(delta.schedulerJankMs.rounded())) 毫秒才响应（平时只要 \(Int(delta.jankBaselineMs.rounded())) 毫秒）"
+                metrics: .scheduling(
+                    jankMs: Int(delta.schedulerJankMs.rounded()),
+                    baselineMs: Int(delta.jankBaselineMs.rounded())
+                )
             ))
         }
         let heat = thermalContribution(delta.thermal)
         if heat > 0 {
             out.append(CauseEvidence(
                 kind: .thermal, contribution: heat,
-                headline: "温度限制",
-                detail: thermalDetail(delta.thermal)
+                metrics: .thermal(delta.thermal)
             ))
         }
         return out.sorted { $0.contribution > $1.contribution }
@@ -334,48 +345,20 @@ struct StallEvaluator: Sendable {
         return Array(order.prefix(5)).compactMap { byPid[$0] }
     }
 
-    private func reason(for proc: ProcessDelta, cpuShare: Double) -> String {
+    private func reason(for proc: ProcessDelta, cpuShare: Double) -> CulpritReason {
         if cpuShare > 0.2 {
-            return String(format: "%.0f%% CPU", cpuShare * 100)
+            return .cpuShare(percent: Int((cpuShare * 100).rounded()))
         }
         if proc.cpuOneCore >= 0.5 {
-            return String(format: "%.1f 核", proc.cpuOneCore)
+            return .cpuCores(proc.cpuOneCore)
         }
         if proc.diskBytesPerSecond > 5 * 1_048_576 {
-            return "磁盘 \(formatRate(proc.diskBytesPerSecond))"
+            return .disk(bytesPerSecond: proc.diskBytesPerSecond)
         }
         if proc.footprintBytes > 1_073_741_824 {
-            return String(format: "%.1f GB 内存", Double(proc.footprintBytes) / 1_073_741_824)
+            return .memory(bytes: Double(proc.footprintBytes))
         }
-        return ""
-    }
-
-    private func memoryHeadline(_ delta: SystemDelta) -> String {
-        switch delta.memoryPressure {
-        case 2: return "内存严重不足"
-        case 1: return "内存压力偏高"
-        default: return "内存压缩 \(Int(Double(delta.compressorBytes) / 1_073_741_824)) GB"
-        }
-    }
-
-    private func memoryDetail(_ delta: SystemDelta) -> String {
-        var parts = [
-            "系统压缩了 \(String(format: "%.1f", Double(delta.compressorBytes) / 1_073_741_824)) GB 内存",
-            "拿 \(String(format: "%.0f", Double(delta.swapUsedBytes) / 1_048_576)) MB 硬盘当内存用"
-        ]
-        if delta.swapDeltaBytesPerSecond > 1_048_576 {
-            parts.append("还在不停地把数据搬进搬出")
-        }
-        return parts.joined(separator: "，")
-    }
-
-    private func thermalDetail(_ state: ProcessInfo.ThermalState) -> String {
-        switch state {
-        case .fair: return "芯片开始降频"
-        case .serious: return "明显降频，性能被压低"
-        case .critical: return "严重过热，系统强制限速"
-        default: return "温度正常"
-        }
+        return .none
     }
 
     private func norm(_ value: Double, low: Double, high: Double) -> Int {
@@ -383,11 +366,4 @@ struct StallEvaluator: Sendable {
         let ratio = (value - low) / (high - low)
         return min(100, max(0, Int((ratio * 100).rounded())))
     }
-}
-
-func formatRate(_ bytesPerSecond: Double) -> String {
-    let mb = bytesPerSecond / 1_048_576
-    if mb >= 1024 { return String(format: "%.1f GB/s", mb / 1024) }
-    if mb >= 1 { return String(format: "%.0f MB/s", mb) }
-    return String(format: "%.0f KB/s", bytesPerSecond / 1024)
 }

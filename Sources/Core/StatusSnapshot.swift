@@ -43,22 +43,24 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
         self.appVersion = appVersion
         self.at = assessment.at
         self.level = assessment.level.caseName
-        self.levelLabel = assessment.level.label
+        // The agent contract is English no matter which language the window is
+        // in, so an agent script does not change behavior with the user locale.
+        self.levelLabel = Copy.level(assessment.level, .base)
         self.score = assessment.score
-        self.summary = assessment.plainSummary
+        self.summary = Copy.summary(assessment, .base)
         self.causes = assessment.causes.map {
-            SnapshotCause(kind: $0.kind.rawValue, label: $0.kind.label, contribution: $0.contribution)
+            SnapshotCause(kind: $0.kind.rawValue, label: Copy.causeName($0.kind, .base), contribution: $0.contribution)
         }
         self.culprits = assessment.culprits.map { culprit in
             SnapshotCulprit(
                 pid: culprit.pid,
                 name: culprit.displayName,
-                role: culprit.app?.role,
+                role: culprit.app?.role.map { Copy.processRole($0, .base) },
                 cpuCores: (culprit.cpuOneCore * 100).rounded() / 100,
                 diskMBps: (Double(culprit.diskBytesPerSecond) / 1_048_576 * 10).rounded() / 10,
                 memoryMB: Int(culprit.footprintBytes / 1_048_576),
                 score: culprit.score,
-                reason: culprit.reason
+                reason: Copy.culpritReason(culprit.reason, .base)
             )
         }
         self.cpuBusyPercent = Int((assessment.cpuBusy * 100).rounded())

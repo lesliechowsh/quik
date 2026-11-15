@@ -8,7 +8,7 @@ Write down why the existing option was rejected when you do implement it yoursel
 
 ## Verify against the real artifact
 
-Build, launch, and inspect the running app. A compile pass is not a verification. The checks live in `scripts/ui-check.sh` and `scripts/verify-experience.sh`; rerun them after UI or metric changes.
+Build, launch, and inspect the running app. A compile pass is not a verification. The checks live in `scripts/ui-check.sh`, `scripts/verify-languages.sh`, and `scripts/verify-experience.sh`; rerun them after UI or metric changes.
 
 ## Measure, then claim
 

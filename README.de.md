@@ -4,7 +4,7 @@
 
 Ein Stockungsmonitor für macOS, der in der Menüleiste lebt. Er beantwortet zwei Fragen: stockt das System gerade, und wodurch.
 
-Natives Swift, keine Fremdbibliotheken. Gemessene Kosten im eingeschwungenen Zustand: 0,8 % eines Kerns (0,07 % von 12 Kernen) bei etwa 25 MB residentem Speicher. Die Methode steht in `docs/metric-validation.md`. Die Oberfläche der App ist derzeit auf Chinesisch.
+Natives Swift, keine Fremdbibliotheken. Gemessene Kosten im eingeschwungenen Zustand: 0,8 % eines Kerns (0,07 % von 12 Kernen) bei etwa 25 MB residentem Speicher. Die Methode steht in `docs/metric-validation.md`. Die Oberfläche folgt der Systemsprache und ist auf vereinfachtem Chinesisch, Englisch, Deutsch, Französisch und Japanisch verfügbar.
 
 ## Installation
 
@@ -62,6 +62,9 @@ scripts/ui-check.sh
 # Messschleife: kontrollierte CPU-Überlast, prüft Sonde und Entscheidung
 # Flattermessung: Zyklen von 6 s Volllast / 6 s Leerlauf, zählt Wechsel von Zustand und Rangliste (scripts/flap-check.sh)
 scripts/verify-experience.sh
+
+# Sprachen: startet die echte App je Oberflächensprache einmal, prüft dass Panel- und Installationstext die Ränder freilässt
+scripts/verify-languages.sh
 ```
 
 ```bash
@@ -83,6 +86,8 @@ scripts/verify-agent.sh
 Die Schritte zum Veröffentlichen stehen in `docs/distribution.md`.
 
 `scripts/ui-check.sh` schreibt Screenshots nach `/tmp/quik-ui` und prüft drei Dinge: die Fensterrechtecke von Panel und schwebendem Fenster innerhalb des Bildschirms, dass jede Aufnahme mehr als eine Farbe zeichnet statt ein leeres Fenster zu zeigen, und den Dock-Symboltext innerhalb der Kachel. Kein Text wird per OCR gelesen: bei kleiner Schrift lieferte es falsche Erfolge und hielt einmal die Panel-Aufnahme für die des schwebenden Fensters. Die Screenshots liegen zum Ansehen im Verzeichnis. Jede fehlgeschlagene Prüfung liefert einen Exit-Code ungleich null.
+
+`scripts/verify-languages.sh` nutzt dieselbe Aufnahme- und Tintenmethode und startet die echte App je Oberflächensprache einmal. Es prüft auf jeder Seite von Panel und Installationsseite mindestens 24 Punkt Abstand zum Fensterrand. Damit ist belegt, dass die Übersetzung weder überläuft noch abgeschnitten wird; ob sie sich gut liest, zeigen erst die Screenshots in `/tmp/quik-ui`.
 
 Die Fensterposition wird separat geprüft, weil ein Screenshot per Fenster-ID nur beweist, dass der Inhalt stimmt, nicht dass das Fenster auf dem Bildschirm liegt. Eine frühe Version setzte das Panel über den oberen Bildschirmrand; der Inhalts-Screenshot war einwandfrei und die Prüfung bestand trotzdem.
 

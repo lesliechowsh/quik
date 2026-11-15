@@ -7,7 +7,9 @@ struct PanelView: View {
     var onActivityMonitor: () -> Void
     var onToggleHUD: () -> Void
     var onToggleAdvanced: () -> Void
-    @State private var showingAgentInstall = PanelView.agentPreviewState != nil
+    var showingAgentInstall: Bool = PanelView.agentPreviewState != nil
+    var onShowAgentInstall: () -> Void = {}
+    var onCloseAgentInstall: () -> Void = {}
 
     private static var agentPreviewState: SkillState? {
         switch ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] {
@@ -22,7 +24,7 @@ struct PanelView: View {
     var body: some View {
         if showingAgentInstall {
             AgentInstallView(
-                onBack: { showingAgentInstall = false },
+                onBack: onCloseAgentInstall,
                 previewState: PanelView.agentPreviewState
             )
         } else {
@@ -42,15 +44,17 @@ struct PanelView: View {
             }
             culprits
             if !store.advanced, assessment.level != .fluid {
-                Text("结束前先保存好正在编辑的内容。")
+                Text(Copy.saveFirstHint())
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
             footer
         }
         .padding(16)
-        .frame(width: 400, height: store.advanced ? 500 : 390, alignment: .top)
+        .frame(width: 400, alignment: .top)
+        .frame(minHeight: 390, alignment: .top)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -71,9 +75,11 @@ struct PanelView: View {
                         .monospacedDigit()
                         .foregroundStyle(accent)
                 }
-                Text(assessment.level.label)
+                Text(Copy.level(assessment.level))
                     .font(store.advanced ? .title3.weight(.semibold) : .system(size: 30, weight: .bold))
                     .foregroundStyle(store.advanced ? Color.primary : accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             Text(summary)
                 .font(.callout)
@@ -83,21 +89,22 @@ struct PanelView: View {
     }
 
     private var summary: String {
-        assessment.plainSummary
+        Copy.summary(assessment)
     }
 
     private var calmState: some View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            Text("最近 \(store.history.count) 秒都正常")
+            Text(Copy.normalForLast(store.history.count))
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var causes: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(assessment.level == .fluid ? "现在的状态" : "哪里出了问题")
+            Text(assessment.level == .fluid ? Copy.currentState() : Copy.whatWentWrong())
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             ForEach(assessment.causes.prefix(3)) { cause in
@@ -106,8 +113,11 @@ struct PanelView: View {
                         .frame(width: 16)
                         .foregroundStyle(accent)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(cause.headline).font(.callout.weight(.medium))
-                        Text(cause.detail).font(.caption).foregroundStyle(.secondary)
+                        Text(Copy.causeHeadline(cause)).font(.callout.weight(.medium))
+                        Text(Copy.causeDetail(cause))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -127,7 +137,7 @@ struct PanelView: View {
     private var culprits: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !assessment.culprits.isEmpty {
-                Text(assessment.level == .fluid ? "占用最多的" : "先处理这个")
+                Text(assessment.level == .fluid ? Copy.usingTheMost() : Copy.fixThisFirst())
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 5)
@@ -140,7 +150,7 @@ struct PanelView: View {
                     )
                 }
             } else if assessment.level != .fluid {
-                Text("这些资源是系统自己在用，普通权限看不到是哪个程序。可以打开活动监视器查看。")
+                Text(Copy.systemResourcesHidden())
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -152,7 +162,7 @@ struct PanelView: View {
         VStack(spacing: 8) {
             if store.advanced {
                 if assessment.level != .fluid && assessment.measuredCPUShare < 0.85 {
-                    Text("还有约 \(Int((1 - assessment.measuredCPUShare) * 100))% 的 CPU 被系统进程占用，普通权限看不到明细")
+                    Text(Copy.hiddenCPUShare(Int(((1 - assessment.measuredCPUShare) * 100).rounded())))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,27 +171,26 @@ struct PanelView: View {
                 Sparkline(values: store.history, accent: accent)
                     .frame(height: 30)
             }
-            HStack {
-                Text(store.advanced ? "最近 \(store.history.count) 秒" : "")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Spacer()
+            Text(store.advanced ? Copy.lastSeconds(store.history.count) : " ")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            // Wraps instead of shrinking: German and French labels are longer
+            // than the Chinese ones this row was sized for.
+            FlowLayout(spacing: 10) {
                 if store.advanced {
-                    Button("活动监视器", action: onActivityMonitor)
+                    Button(Copy.activityMonitor(), action: onActivityMonitor)
                         .buttonStyle(.link)
                         .font(.caption)
                 }
-                Button(store.hudVisible ? "隐藏悬浮窗" : "显示悬浮窗", action: onToggleHUD)
+                Button(store.hudVisible ? Copy.hideHUD() : Copy.showHUD(), action: onToggleHUD)
                     .buttonStyle(.link)
                     .font(.caption)
-                if !store.advanced {
-                    Button("安装到 AI 助手") { showingAgentInstall = true }
-                        .buttonStyle(.link)
-                        .font(.caption)
-                }
-                Button(store.advanced ? "普通模式" : "高级模式", action: onToggleAdvanced)
-                .buttonStyle(.link)
-                .font(.caption)
+                Button(Copy.installForAssistant(), action: onShowAgentInstall)
+                    .buttonStyle(.link)
+                    .font(.caption)
+                Button(store.advanced ? Copy.normalMode() : Copy.advancedMode(), action: onToggleAdvanced)
+                    .buttonStyle(.link)
+                    .font(.caption)
             }
         }
     }
@@ -219,27 +228,27 @@ private struct CulpritRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let role = culprit.app?.role {
-                    Text(role)
+                    Text(Copy.processRole(role))
                         .font(advanced ? .caption2 : .callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
-            if advanced, !culprit.reason.isEmpty {
-                Text(culprit.reason)
+            if advanced, culprit.reason != .none {
+                Text(Copy.culpritReason(culprit.reason))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             if culprit.app?.isSystem != true {
-                Button(advanced ? "结束" : "结束\(culprit.displayName)", action: onQuit)
+                Button(advanced ? Copy.quit() : Copy.quitCulprit(culprit.displayName), action: onQuit)
                     .buttonStyle(QuitButtonStyle(compact: advanced))
                     .opacity(advanced && !hovering ? 0.8 : 1)
             }
             if advanced {
                 Menu {
-                    Button("查看它在忙什么（3 秒）", action: onSample)
+                    Button(Copy.sample(), action: onSample)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

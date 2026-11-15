@@ -23,6 +23,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private var lastAppliedSignature = ""
     private var restoreHUDAfterPanel = false
     private var suppressHUDRestore = false
+    private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] != nil
     private let dockIcon = DockIconController()
 
     init(preview: String? = nil) {
@@ -97,7 +98,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
                 let culprit = Culprit(
                     pid: pid, name: "quit-probe", attribution: .measured,
                     cpuOneCore: 0, diskBytesPerSecond: 0, footprintBytes: 0,
-                    score: 0, reason: ""
+                    score: 0, reason: .none
                 )
                 CulpritActions.quit(culprit) { ok in
                     try? "\(ok)".write(toFile: "/tmp/quik-quit-result.txt", atomically: true, encoding: .utf8)
@@ -145,9 +146,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     // NSHostingController as popover content makes NSPopover place the window above the
     // screen top on macOS 26. A plain controller with an explicit preferredContentSize
     // keeps the placement inside the screen. Reproduce with /tmp/popover-probe.swift.
+    // The height comes from the view itself: translated text wraps to more lines
+    // than the Chinese original, and a fixed height would clip it.
     private static func panelController(_ view: PanelView) -> NSViewController {
         let host = NSHostingView(rootView: view)
-        let height: CGFloat = view.store.advanced ? 500 : 390
+        host.frame = NSRect(x: 0, y: 0, width: 400, height: 400)
+        let height = max(ceil(host.fittingSize.height), 390)
         host.frame = NSRect(x: 0, y: 0, width: 400, height: height)
         let controller = NSViewController()
         controller.view = host
@@ -167,8 +171,16 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             onQuit: { [weak self] culprit in self?.confirmQuit(culprit) },
             onActivityMonitor: { CulpritActions.openActivityMonitor() },
             onToggleHUD: { [weak self] in self?.toggleHUD() },
-            onToggleAdvanced: { [weak self] in self?.toggleAdvanced() }
+            onToggleAdvanced: { [weak self] in self?.toggleAdvanced() },
+            showingAgentInstall: showingAgentInstall,
+            onShowAgentInstall: { [weak self] in self?.setAgentInstallVisible(true) },
+            onCloseAgentInstall: { [weak self] in self?.setAgentInstallVisible(false) }
         )
+    }
+
+    private func setAgentInstallVisible(_ visible: Bool) {
+        showingAgentInstall = visible
+        rebuildPanel()
     }
 
     private func updateTitle(_ assessment: StallAssessment) {
@@ -187,7 +199,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             glyph = "■"
         }
         let advanced = QuikStore.advancedMode
-        let title = " \(glyph) " + assessment.menuTitle(advanced: advanced)
+        let title = " \(glyph) " + Copy.menuTitle(assessment, advanced: advanced)
         if title != lastTitle {
             lastTitle = title
             button.attributedTitle = NSAttributedString(
@@ -208,6 +220,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     private func toggleAdvanced() {
         store.advanced.toggle()
+        rebuildPanel()
+    }
+
+    private func rebuildPanel() {
         suppressHUDRestore = true
         popover.performClose(nil)
         popover.contentViewController = Self.panelController(panel())
@@ -226,18 +242,18 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private func confirmQuit(_ culprit: Culprit) {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "退出「\(culprit.displayName)」？"
-        alert.informativeText = "程序里没保存的内容会丢失。退出后系统应该会马上变快。"
-        alert.addButton(withTitle: "退出")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = Copy.confirmQuitTitle(culprit.displayName)
+        alert.informativeText = Copy.confirmQuitBody()
+        alert.addButton(withTitle: Copy.quit())
+        alert.addButton(withTitle: Copy.cancel())
         alert.alertStyle = .warning
         let confirmed = alert.runModal() == .alertFirstButtonReturn
         guard confirmed else { return showPopover(recordFrame: false) }
         CulpritActions.quit(culprit) { [weak self] quit in
             if !quit {
                 let failed = NSAlert()
-                failed.messageText = "没能退出「\(culprit.displayName)」"
-                failed.informativeText = "这个进程可能是系统管理的，普通权限动不了它。可以在活动监视器里再试一次。"
+                failed.messageText = Copy.quitFailedTitle(culprit.displayName)
+                failed.informativeText = Copy.quitFailedBody()
                 failed.runModal()
             }
             self?.showPopover(recordFrame: false)
@@ -312,16 +328,16 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private func showStatusMenu(_ event: NSEvent) {
         guard let button = item.button else { return }
         let menu = NSMenu()
-        let open = NSMenuItem(title: "打开面板", action: #selector(openPanelAction), keyEquivalent: "")
+        let open = NSMenuItem(title: Copy.openPanel(), action: #selector(openPanelAction), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
         menu.addItem(.separator())
-        let toggle = NSMenuItem(title: "显示悬浮窗", action: #selector(toggleHUDAction), keyEquivalent: "")
+        let toggle = NSMenuItem(title: Copy.showHUD(), action: #selector(toggleHUDAction), keyEquivalent: "")
         toggle.target = self
         toggle.state = store.hudVisible ? .on : .off
         menu.addItem(toggle)
         menu.addItem(.separator())
-        let uninstall = NSMenuItem(title: "卸载 Quik…", action: #selector(uninstallAction), keyEquivalent: "")
+        let uninstall = NSMenuItem(title: Copy.uninstall() + "…", action: #selector(uninstallAction), keyEquivalent: "")
         uninstall.target = self
         menu.addItem(uninstall)
         NSMenu.popUpContextMenu(menu, with: event, for: button)
@@ -340,10 +356,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     @objc private func uninstallAction() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "卸载 Quik？"
-        alert.informativeText = "会删除 Quik 放进系统的所有东西：两个标准技能目录里的 quik 技能、~/.local/bin/quik 命令行工具、~/Library/Application Support/Quik 数据，然后退出。之后把 Quik 从「应用程序」拖进废纸篓就完成了。"
-        alert.addButton(withTitle: "卸载")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = Copy.uninstallTitle()
+        alert.informativeText = Copy.uninstallBody()
+        alert.addButton(withTitle: Copy.uninstall())
+        alert.addButton(withTitle: Copy.cancel())
         alert.alertStyle = .warning
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         AgentInstall.uninstall()
