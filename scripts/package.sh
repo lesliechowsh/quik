@@ -107,6 +107,10 @@ EOF
 fi
 
 rm -f "$DMG" "$ZIP"
+# SHA256SUMS is written at the very end, after stapling changes the DMG. Delete
+# any stale list now so a run that fails midway cannot leave last version's
+# checksums behind for a release to pick up.
+rm -f "$PKG_DIR/SHA256SUMS"
 hdiutil create -volname Quik -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 ditto -c -k --keepParent "$APP" "$ZIP"
 

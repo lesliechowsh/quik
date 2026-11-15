@@ -39,13 +39,15 @@ scripts/verify-package.sh
 
 ```bash
 git tag -a vX.Y.Z -m "Quik X.Y.Z"
-git push origin main --tags
+git push origin main vX.Y.Z
 gh release create vX.Y.Z \
   build/package/Quik-X.Y.Z.dmg \
   build/package/Quik-X.Y.Z.zip \
   build/package/SHA256SUMS \
   --title "Quik X.Y.Z" --notes-file /tmp/quik-release-notes.md
 ```
+
+不要用 `--tags` 推送：它会把本地所有残杂 tag 一起推上去（2026-11-15 发布 0.2.2 时，本地的旧 `v0.2.0` 与编辑器插件的 `local-history-*` 都被带了上去，事后逐个补删）。删 tag 时本地远端都要删，只删远端的话下次推送又会回来。公证 Accepted 但 staple 网络失败时，脚本会在 SHA256SUMS 之前退出；staple 可单独重试 `xcrun stapler staple <dmg>`，但校验和必须重新生成或重跑整个脚本，发布前 `cat build/package/SHA256SUMS` 确认版本号。
 
 5. 回下载核对：
 
