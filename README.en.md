@@ -4,7 +4,7 @@
 
 A macOS stall monitor that lives in the menu bar. It answers two questions: is the system stalling right now, and what is causing it.
 
-Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of one core (0.07% of 12 cores), with about 25 MB resident. The method is in `docs/metric-validation.md`. The interface follows the system language and ships in Simplified Chinese, English, German, French, and Japanese.
+Native Swift, no third-party dependencies. Measured steady-state cost is 0.8% of one core (0.07% of 12 cores), with about 25 MB resident. The method is in `docs/metric-validation.md`. The interface follows the system language by default and can be switched from the top right of the panel, in Simplified Chinese, English, German, French, and Japanese; an unsupported system language falls back to English.
 
 ## Install
 
@@ -87,7 +87,7 @@ Maintainer release steps are in `docs/distribution.md`.
 
 `scripts/ui-check.sh` writes screenshots to `/tmp/quik-ui` and asserts three things: the window rectangles of the panel and the floating window staying on screen, every capture drawing more than one color instead of a blank window, and the Dock icon text staying inside the tile. It reads no text with OCR: OCR on small UI text produced false passes, and once reported a floating-window capture that was really the panel. The screenshots stay in the directory for a person to look at. Any failed assertion returns a non-zero exit code.
 
-`scripts/verify-languages.sh` reuses that capture and ink method and launches the real app once per interface language, asserting at least 24 points of clearance on every side of the panel and install page. That proves the copy is not overflowing or clipped at the window edge; whether the wording reads well still needs the screenshots in `/tmp/quik-ui`.
+`scripts/verify-languages.sh` reuses that capture and ink method and launches the real app once per interface language, asserting at least 24 points of clearance on every side of the panel, advanced page, and install page, plus the size, position, and tinted fill of the language control in the top right. It then switches a running app from Japanese to German and asserts the control and the copy both change at once, the choice is saved, and it survives a relaunch; finally it starts under a Korean system language and asserts the English fallback. No text is read, so this proves layout, a recognizable control, and working switching; whether the wording reads well still needs the screenshots in `/tmp/quik-ui`.
 
 Window position is asserted separately because a screenshot by window ID proves the content is right, not that the window is on screen. An early version put the panel above the top of the screen; its content screenshot looked fine and the check still passed.
 

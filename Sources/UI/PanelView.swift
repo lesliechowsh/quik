@@ -14,6 +14,7 @@ struct PanelView: View {
     var onActivityMonitor: () -> Void
     var onToggleHUD: () -> Void
     var onToggleAdvanced: () -> Void
+    var onLanguageChange: (AppLanguage) -> Void = { _ in }
     var showingAgentInstall: Bool = PanelView.agentPreviewState != nil
     var onShowAgentInstall: () -> Void = {}
     var onCloseAgentInstall: () -> Void = {}
@@ -39,6 +40,8 @@ struct PanelView: View {
         Group {
             if showingAgentInstall {
                 AgentInstallView(
+                    language: store.language,
+                    onLanguageChange: onLanguageChange,
                     onBack: onCloseAgentInstall,
                     previewState: PanelView.agentPreviewState
                 )
@@ -91,18 +94,22 @@ struct PanelView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if store.advanced {
-                    Text("\(assessment.score)")
-                        .font(.system(size: 40, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(accent)
+            HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if store.advanced {
+                        Text("\(assessment.score)")
+                            .font(.system(size: 40, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(accent)
+                    }
+                    Text(Copy.level(assessment.level))
+                        .font(store.advanced ? .title3.weight(.semibold) : .system(size: 30, weight: .bold))
+                        .foregroundStyle(store.advanced ? Color.primary : accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                Text(Copy.level(assessment.level))
-                    .font(store.advanced ? .title3.weight(.semibold) : .system(size: 30, weight: .bold))
-                    .foregroundStyle(store.advanced ? Color.primary : accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                LanguageMenu(language: store.language, onChange: onLanguageChange)
             }
             Text(summary)
                 .font(.callout)
@@ -168,6 +175,7 @@ struct PanelView: View {
                     CulpritRow(
                         culprit: culprit,
                         advanced: store.advanced,
+                        copy: .ui,
                         onSample: { onSample(culprit) },
                         onQuit: { onQuit(culprit) }
                     )
@@ -222,6 +230,10 @@ struct PanelView: View {
 private struct CulpritRow: View {
     let culprit: Culprit
     var advanced: Bool
+    // Passed in rather than read from Copy at render time: the row's other
+    // inputs do not change when the language does, and SwiftUI would otherwise
+    // keep the old strings until the next assessment arrives.
+    var copy: CopyTable
     var onSample: () -> Void
     var onQuit: () -> Void
 
@@ -251,7 +263,7 @@ private struct CulpritRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let role = culprit.app?.role {
-                    Text(Copy.processRole(role))
+                    Text(Copy.processRole(role, copy))
                         .font(advanced ? .caption2 : .callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -259,19 +271,19 @@ private struct CulpritRow: View {
             }
             Spacer(minLength: 4)
             if advanced, culprit.reason != .none {
-                Text(Copy.culpritReason(culprit.reason))
+                Text(Copy.culpritReason(culprit.reason, copy))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             if culprit.app?.isSystem != true {
-                Button(advanced ? Copy.quit() : Copy.quitCulprit(culprit.displayName), action: onQuit)
+                Button(advanced ? Copy.quit(copy) : Copy.quitCulprit(culprit.displayName, copy), action: onQuit)
                     .buttonStyle(QuitButtonStyle(compact: advanced))
                     .opacity(advanced && !hovering ? 0.8 : 1)
             }
             if advanced {
                 Menu {
-                    Button(Copy.sample(), action: onSample)
+                    Button(Copy.sample(copy), action: onSample)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

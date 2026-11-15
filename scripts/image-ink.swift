@@ -6,25 +6,48 @@ import ImageIO
 // A window that failed to draw is one flat color. This counts the pixels that
 // differ from the image's dominant color, so a blank capture fails the check
 // without reading any text.
-// usage: image-ink.swift <png> [minPercent] [maxPercent] [--inset PIXELS]
+// usage: image-ink.swift <png> [minPercent] [maxPercent] [--inset PIXELS] [--region X,Y,W,H]
 // --inset ignores the outer band of the image. A window capture carries the
 // popover's 13 point shadow border and its arrow; both differ from the panel
 // background and would otherwise read as text at the edge.
+// --region limits the count to one part of the window, in pixels from the top
+// left, and still reports the bounding box in image coordinates.
 
 var positional: [String] = []
 var inset = 0
+var probes: [(x: Int, y: Int)] = []
+var region: (x: Int, y: Int, width: Int, height: Int)?
 var index = 1
 while index < CommandLine.arguments.count {
-    if CommandLine.arguments[index] == "--inset", index + 1 < CommandLine.arguments.count {
+    let argument = CommandLine.arguments[index]
+    if argument == "--inset", index + 1 < CommandLine.arguments.count {
         inset = max(Int(CommandLine.arguments[index + 1]) ?? 0, 0)
         index += 2
+    } else if argument == "--probe", index + 1 < CommandLine.arguments.count {
+        let parts = CommandLine.arguments[index + 1].split(separator: ",").compactMap { Int($0) }
+        guard parts.count == 2 else {
+            FileHandle.standardError.write(Data("--probe wants x,y in pixels\n".utf8))
+            exit(2)
+        }
+        probes.append((parts[0], parts[1]))
+        index += 2
+    } else if argument == "--region", index + 1 < CommandLine.arguments.count {
+        let parts = CommandLine.arguments[index + 1].split(separator: ",").compactMap { Int($0) }
+        guard parts.count == 4, parts[2] > 0, parts[3] > 0 else {
+            FileHandle.standardError.write(Data("--region wants x,y,w,h in pixels\n".utf8))
+            exit(2)
+        }
+        region = (parts[0], parts[1], parts[2], parts[3])
+        index += 2
     } else {
-        positional.append(CommandLine.arguments[index])
+        positional.append(argument)
         index += 1
     }
 }
 guard let first = positional.first else {
-    FileHandle.standardError.write(Data("usage: image-ink.swift <png> [min] [max] [--inset PIXELS]\n".utf8))
+    FileHandle.standardError.write(
+        Data("usage: image-ink.swift <png> [min] [max] [--inset PIXELS] [--region X,Y,W,H]\n".utf8)
+    )
     exit(2)
 }
 
@@ -58,12 +81,25 @@ func bucket(_ offset: Int) -> Int {
     return (r << 10) | (g << 5) | b
 }
 
-let top = min(inset, height / 2)
-let left = min(inset, width / 2)
+var top = min(inset, height / 2)
+var left = min(inset, width / 2)
+var bottom = height - top
+var right = width - left
+if let region {
+    left = max(left, region.x)
+    top = max(top, region.y)
+    right = min(right, region.x + region.width)
+    bottom = min(bottom, region.y + region.height)
+}
+guard left < right, top < bottom else {
+    FileHandle.standardError.write(Data("region is outside the image\n".utf8))
+    exit(2)
+}
+
 var histogram = [Int: Int](minimumCapacity: 1024)
-for y in top..<(height - top) {
+for y in top..<bottom {
     let row = y * bytesPerRow
-    for x in left..<(width - left) where pixels[row + x * 4 + 3] > 16 {
+    for x in left..<right where pixels[row + x * 4 + 3] > 16 {
         histogram[bucket(row + x * 4), default: 0] += 1
     }
 }
@@ -82,9 +118,9 @@ func distance(_ a: Int, _ b: Int) -> Int {
 var ink = 0
 var total = 0
 var minX = width, maxX = -1, minY = height, maxY = -1
-for y in top..<(height - top) {
+for y in top..<bottom {
     let row = y * bytesPerRow
-    for x in left..<(width - left) where pixels[row + x * 4 + 3] > 16 {
+    for x in left..<right where pixels[row + x * 4 + 3] > 16 {
         total += 1
         if distance(bucket(row + x * 4), dominant) > 6 {
             ink += 1
@@ -104,6 +140,19 @@ if ink > 0 {
                  percent, width, height, minX, minY, maxX - minX + 1, maxY - minY + 1))
 } else {
     print(String(format: "ink %.2f%% (%dx%d)", percent, width, height))
+}
+
+// A filled control is only a few steps away from the panel background, below
+// the ink threshold. A probe reports the luminance at one pixel so a caller can
+// tell a tinted capsule from an empty corner.
+for probe in probes {
+    guard probe.x >= 0, probe.x < width, probe.y >= 0, probe.y < height else {
+        print("probe \(probe.x),\(probe.y)=na")
+        continue
+    }
+    let offset = probe.y * bytesPerRow + probe.x * 4
+    let luminance = (Double(pixels[offset]) + Double(pixels[offset + 1]) + Double(pixels[offset + 2])) / 765
+    print(String(format: "probe %d,%d=%.3f", probe.x, probe.y, luminance))
 }
 
 guard positional.count >= 3 else { exit(0) }

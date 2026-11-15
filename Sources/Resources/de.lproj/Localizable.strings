@@ -52,6 +52,8 @@
 "System audio" = "Systemaudio";
 "Photos analysis" = "Fotoanalyse";
 "Open Panel" = "Panel öffnen";
+"Follow the system language" = "Systemsprache verwenden";
+"Interface language" = "Sprache der Oberfläche";
 "Show Floating Window" = "Schwebefenster einblenden";
 "Hide Floating Window" = "Schwebefenster ausblenden";
 "Activity Monitor" = "Aktivitätsanzeige";

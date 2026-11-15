@@ -107,11 +107,20 @@ enum AgentInstall {
 }
 
 struct AgentInstallView: View {
+    var language: AppLanguage
+    var onLanguageChange: (AppLanguage) -> Void
     var onBack: () -> Void
     private let previewState: SkillState?
     @State private var state: SkillState
 
-    init(onBack: @escaping () -> Void, previewState: SkillState? = nil) {
+    init(
+        language: AppLanguage = .stored,
+        onLanguageChange: @escaping (AppLanguage) -> Void = { _ in },
+        onBack: @escaping () -> Void,
+        previewState: SkillState? = nil
+    ) {
+        self.language = language
+        self.onLanguageChange = onLanguageChange
         self.onBack = onBack
         self.previewState = previewState
         _state = State(initialValue: previewState ?? .absent)
@@ -119,6 +128,10 @@ struct AgentInstallView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Spacer()
+                LanguageMenu(language: language, onChange: onLanguageChange)
+            }
             Text(Copy.agentTitle())
                 .font(.system(size: 26, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)

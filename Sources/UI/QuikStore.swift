@@ -13,6 +13,10 @@ final class QuikStore: ObservableObject {
         didSet { UserDefaults.standard.set(hudVisible, forKey: QuikStore.hudVisibleKey) }
     }
 
+    @Published var language: AppLanguage = AppLanguage.stored {
+        didSet { AppLanguage.select(language) }
+    }
+
     static let advancedKey = "advancedMode"
     static let hudVisibleKey = "hudVisible"
 

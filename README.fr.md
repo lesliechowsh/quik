@@ -4,7 +4,7 @@
 
 Un moniteur de blocages macOS qui vit dans la barre des menus. Il répond à deux questions : le système est-il bloqué maintenant, et qu'est-ce qui le cause.
 
-Swift natif, aucune dépendance tierce. Le coût mesuré en régime stable est de 0,8 % d'un cœur (0,07 % de 12 cœurs), pour environ 25 Mo de mémoire résidente. La méthode se trouve dans `docs/metric-validation.md`. L'interface suit la langue du système et existe en chinois simplifié, anglais, allemand, français et japonais.
+Swift natif, aucune dépendance tierce. Le coût mesuré en régime stable est de 0,8 % d'un cœur (0,07 % de 12 cœurs), pour environ 25 Mo de mémoire résidente. La méthode se trouve dans `docs/metric-validation.md`. L'interface suit la langue du système par défaut et peut être changée depuis le coin supérieur droit du panneau, en chinois simplifié, anglais, allemand, français et japonais ; une langue système non prise en charge revient à l'anglais.
 
 ## Installation
 
@@ -87,7 +87,7 @@ Les étapes de publication sont dans `docs/distribution.md`.
 
 `scripts/ui-check.sh` écrit les captures dans `/tmp/quik-ui` et vérifie trois choses : les rectangles du panneau et de la fenêtre flottante restant à l'écran, chaque capture contenant plus d'une couleur plutôt qu'une fenêtre vide, et le texte de l'icône du Dock restant dans la tuile. Aucun texte n'est lu par OCR : sur du petit texte il produisait de faux succès, et une fois a pris la capture du panneau pour celle de la fenêtre flottante. Les captures restent dans le dossier pour être regardées. Toute assertion en échec renvoie un code de sortie non nul.
 
-`scripts/verify-languages.sh` réutilise cette méthode de capture et d'encre et lance la vraie application une fois par langue d'interface. Il exige au moins 24 points de marge sur chaque côté du panneau et de la page d'installation. Cela prouve que la traduction ne déborde pas et n'est pas rognée au bord de la fenêtre ; la qualité de la formulation se juge sur les captures dans `/tmp/quik-ui`.
+`scripts/verify-languages.sh` réutilise cette méthode de capture et d'encre et lance la vraie application une fois par langue d'interface. Il exige au moins 24 points de marge sur chaque côté du panneau, de la page avancée et de la page d'installation, ainsi que la taille, la position et le fond teinté du sélecteur de langue en haut à droite. Il bascule ensuite une application en cours du japonais vers l'allemand et vérifie que le sélecteur et les textes suivent aussitôt, que le choix est enregistré et qu'il survit à un redémarrage ; enfin il démarre sous une langue système coréenne et vérifie le repli sur l'anglais. Aucun texte n'est lu : cela prouve la mise en page, un sélecteur reconnaissable et un changement effectif ; la qualité de la formulation se juge sur les captures dans `/tmp/quik-ui`.
 
 La position de la fenêtre est vérifiée séparément, car une capture par identifiant de fenêtre prouve que le contenu est bon, pas que la fenêtre est à l'écran. Une première version plaçait le panneau au-dessus du haut de l'écran ; la capture du contenu était parfaite et le contrôle passait quand même.
 

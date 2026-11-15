@@ -132,6 +132,15 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
                     self?.toggleAdvanced()
                 }
             }
+            if let raw = ProcessInfo.processInfo.environment["QUIK_SWITCH_LANGUAGE"],
+               let language = AppLanguage(rawValue: raw) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                    guard let self else { return }
+                    self.store.language = language
+                    self.updateTitle(self.store.assessment)
+                    self.dockIcon.update(self.store.assessment)
+                }
+            }
             return
         }
 
@@ -173,6 +182,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             onActivityMonitor: { CulpritActions.openActivityMonitor() },
             onToggleHUD: { [weak self] in self?.toggleHUD() },
             onToggleAdvanced: { [weak self] in self?.toggleAdvanced() },
+            onLanguageChange: { [weak self] language in
+                guard let self else { return }
+                self.store.language = language
+                self.updateTitle(self.store.assessment)
+                self.dockIcon.update(self.store.assessment)
+            },
             showingAgentInstall: showingAgentInstall,
             onShowAgentInstall: { [weak self] in self?.setAgentInstallVisible(true) },
             onCloseAgentInstall: { [weak self] in self?.setAgentInstallVisible(false) },
@@ -347,6 +362,21 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         let open = NSMenuItem(title: Copy.openPanel(), action: #selector(openPanelAction), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+        let language = NSMenuItem(title: Copy.interfaceLanguage(), action: nil, keyEquivalent: "")
+        let languages = NSMenu()
+        for option in AppLanguage.allCases {
+            let entry = NSMenuItem(
+                title: option.menuTitle,
+                action: #selector(selectLanguage(_:)),
+                keyEquivalent: ""
+            )
+            entry.target = self
+            entry.representedObject = option.rawValue
+            entry.state = option == store.language ? .on : .off
+            languages.addItem(entry)
+        }
+        language.submenu = languages
+        menu.addItem(language)
         menu.addItem(.separator())
         let toggle = NSMenuItem(title: Copy.showHUD(), action: #selector(toggleHUDAction), keyEquivalent: "")
         toggle.target = self
@@ -365,6 +395,14 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     @objc private func toggleHUDAction() {
         toggleHUD()
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let language = AppLanguage(rawValue: raw) else { return }
+        store.language = language
+        updateTitle(store.assessment)
+        dockIcon.update(store.assessment)
     }
 
     // macOS 在应用被删除后不会执行任何代码，所以清理只能由应用活着时完成：

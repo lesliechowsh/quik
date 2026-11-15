@@ -52,6 +52,8 @@
 "System audio" = "システムオーディオ";
 "Photos analysis" = "写真解析";
 "Open Panel" = "パネルを開く";
+"Follow the system language" = "システム言語に従う";
+"Interface language" = "表示言語";
 "Show Floating Window" = "フローティングウインドウを表示";
 "Hide Floating Window" = "フローティングウインドウを隠す";
 "Activity Monitor" = "アクティビティモニタ";

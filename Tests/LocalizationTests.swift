@@ -105,6 +105,40 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
+    func testSelectingALanguageOverridesTheSystemOne() {
+        let defaults = UserDefaults.standard
+        let key = AppLanguage.storageKey
+        let previous = defaults.string(forKey: key)
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        defaults.set("ja", forKey: key)
+        XCTAssertEqual(Copy.level(.fluid), "快適")
+        XCTAssertEqual(Copy.causeName(.memory), "メモリ")
+    }
+
+    func testEveryShippedLanguageIsSelectableAndNamedDifferently() {
+        let translated: [AppLanguage] = [.simplifiedChinese, .english, .german, .french, .japanese]
+        let endonyms = translated.map(\.endonym)
+        XCTAssertTrue(endonyms.allSatisfy { !$0.isEmpty })
+        XCTAssertEqual(Set(endonyms).count, endonyms.count)
+
+        for language in translated where language != .english {
+            XCTAssertNotNil(
+                Bundle.main.path(forResource: language.rawValue, ofType: "lproj"),
+                "\(language.rawValue).lproj 不存在"
+            )
+        }
+
+        XCTAssertEqual(AppLanguage.system.endonym, AppLanguage.systemMatch.endonym)
+        XCTAssertNotEqual(AppLanguage.effective, .system)
+    }
+
     /// The Dock tile shows one word at 58 points in an 84 point column. A long
     /// translation must still render whole and stay inside the tile, so this
     /// renders the real view for every language and measures the ink.

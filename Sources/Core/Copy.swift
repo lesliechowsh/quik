@@ -6,7 +6,14 @@ import Foundation
 struct CopyTable: Sendable {
     var bundle: Bundle?
 
-    static let ui = CopyTable(bundle: .main)
+    static var ui: CopyTable {
+        let selected = AppLanguage.stored
+        if selected == .system { return CopyTable(bundle: .main) }
+        if let path = Bundle.main.path(forResource: selected.rawValue, ofType: "lproj"),
+           let bundle = Bundle(path: path) { return CopyTable(bundle: bundle) }
+        return CopyTable(bundle: nil)
+    }
+
     static let base = CopyTable(bundle: nil)
 
     func string(_ key: String) -> String {
@@ -204,6 +211,8 @@ enum Copy {
     // MARK: - Interface
 
     static func openPanel(_ t: CopyTable = .ui) -> String { t.string("Open Panel") }
+    static func followSystemLanguage(_ t: CopyTable = .ui) -> String { t.string("Follow the system language") }
+    static func interfaceLanguage(_ t: CopyTable = .ui) -> String { t.string("Interface language") }
     static func showHUD(_ t: CopyTable = .ui) -> String { t.string("Show Floating Window") }
     static func hideHUD(_ t: CopyTable = .ui) -> String { t.string("Hide Floating Window") }
     static func activityMonitor(_ t: CopyTable = .ui) -> String { t.string("Activity Monitor") }
