@@ -20,7 +20,7 @@ trap 'kill "$CAFFEINATE_PID" 2>/dev/null || true' EXIT
 hud_windows() {
   swift scripts/window-bounds.swift Quik 2>/dev/null \
     | sed -n 's/.*w:\([0-9]*\).*/\1/p' \
-    | awk '$1 > 100 && $1 < 300' \
+    | awk '$1 > 80 && $1 < 300' \
     | wc -l | tr -d ' '
 }
 
@@ -78,8 +78,8 @@ else
   fail=1
 fi
 sleep 3
-late="$(swift scripts/window-bounds.swift Quik 2>/dev/null | awk '/^window=/' | sed -n 's/.*w:\([0-9]*\).*/\1/p' | awk '$1 > 100')"
-if [ "$late" = "116" ]; then
+late="$(swift scripts/window-bounds.swift Quik 2>/dev/null | awk '/^window=/' | sed -n 's/.*w:\([0-9]*\).*/\1/p' | awk '$1 > 80')"
+if [ "$late" = "92" ]; then
   echo "PASS 面板关闭后悬浮窗还在"
 else
   echo "FAIL 面板关闭后悬浮窗状态不对 (windows=$late)"

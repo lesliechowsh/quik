@@ -13,7 +13,7 @@ final class HUDController: NSObject, NSMenuDelegate {
     private static let originXKey = "hudOriginX"
     private static let originYKey = "hudOriginY"
 
-    private let size = CGSize(width: 116, height: 36)
+    private let size = CGSize(width: 92, height: 44)
 
     init(store: QuikStore, onTap: @escaping () -> Void, onToggleVisibility: @escaping () -> Void) {
         self.store = store
@@ -189,25 +189,25 @@ struct HUDView: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 3) {
             Circle()
                 .fill(accent)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
             VStack(alignment: .leading, spacing: 1) {
                 Text(store.advanced ? "\(assessment.score)  \(Copy.level(assessment.level))" : Copy.level(assessment.level))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                 Text(detail)
-                    .font(.system(size: 10))
+                    .font(.system(size: 9.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(.ultraThinMaterial)
