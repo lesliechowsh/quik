@@ -7,11 +7,19 @@ private struct PanelHeightKey: PreferenceKey {
     }
 }
 
+/// Where the little triangle sits while the panel hangs off the floating
+/// window. The offset is the floating window's centre in panel coordinates.
+struct PanelArrow: Equatable {
+    enum Edge { case top, bottom }
+    var offset: CGFloat
+    var edge: Edge
+}
+
 /// Window-owned state the panel shows but does not control. Published rather
 /// than passed as a value so the arrow can move without rebuilding the tree,
 /// which would reset the install page's local state.
 final class PanelChrome: ObservableObject {
-    @Published var arrowOffset: CGFloat?
+    @Published var arrow: PanelArrow?
 }
 
 struct PanelView: View {
@@ -47,13 +55,7 @@ struct PanelView: View {
     // happens to have, and the geometry reader hands it to the controller.
     var body: some View {
         VStack(spacing: 0) {
-            if let arrowOffset = chrome.arrowOffset {
-                PanelArrow()
-                    .fill(Color(nsColor: .windowBackgroundColor))
-                    .frame(width: 16, height: 8)
-                    .padding(.leading, max(arrowOffset - 8, 0))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            arrowIf(.top)
             Group {
                 if showingAgentInstall {
                     AgentInstallView(
@@ -69,6 +71,7 @@ struct PanelView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            arrowIf(.bottom)
         }
         .background(
             GeometryReader { proxy in
@@ -76,6 +79,21 @@ struct PanelView: View {
             }
         )
         .onPreferenceChange(PanelHeightKey.self, perform: onContentHeight)
+    }
+
+    @ViewBuilder
+    private func arrowIf(_ edge: PanelArrow.Edge) -> some View {
+        if let arrow = chrome.arrow, arrow.edge == edge {
+            PanelArrowShape()
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .frame(width: 16, height: 8)
+                .rotationEffect(.degrees(edge == .bottom ? 180 : 0))
+                // Clamped to the 400 point card: an offset from a window that
+                // moved first must not widen the panel or it drags the window
+                // along with it.
+                .padding(.leading, min(max(arrow.offset - 8, 0), 384))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var mainPanel: some View {
@@ -251,7 +269,7 @@ struct PanelView: View {
 // A borderless window has no popover arrow, so the panel draws one when it
 // hangs below the floating window. The base sits on the card's top edge and
 // the shape is filled with the same colour, so the two read as one piece.
-private struct PanelArrow: Shape {
+private struct PanelArrowShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))

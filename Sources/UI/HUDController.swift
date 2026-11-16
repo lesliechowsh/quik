@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+
 final class HUDController: NSObject, NSMenuDelegate {
     private var panel: NSPanel?
     private let store: QuikStore
@@ -13,7 +14,13 @@ final class HUDController: NSObject, NSMenuDelegate {
     private static let originXKey = "hudOriginX"
     private static let originYKey = "hudOriginY"
 
-    private let size = CGSize(width: 92, height: 44)
+    /// Advanced mode adds a score and a reason line. Keep the row short in
+    /// normal mode, and give it room to show the extra text when it is on.
+    static func size(advanced: Bool) -> CGSize {
+        advanced ? CGSize(width: 148, height: 50) : CGSize(width: 92, height: 44)
+    }
+
+    private var size: CGSize { Self.size(advanced: store.advanced) }
 
     init(store: QuikStore, onTap: @escaping () -> Void, onToggleVisibility: @escaping () -> Void) {
         self.store = store
@@ -64,6 +71,10 @@ final class HUDController: NSObject, NSMenuDelegate {
 
     var frame: NSRect? {
         panel?.frame
+    }
+
+    var window: NSWindow? {
+        panel
     }
 
     var anchorView: NSView? {
@@ -158,6 +169,30 @@ final class HUDController: NSObject, NSMenuDelegate {
         let defaults = UserDefaults.standard
         defaults.set(Double(panel.frame.origin.x), forKey: Self.originXKey)
         defaults.set(Double(panel.frame.origin.y), forKey: Self.originYKey)
+    }
+
+    /// Dragging the panel's header moves this window; the panel is its child,
+    /// so the window server carries it along.
+    func move(by delta: CGSize) {
+        guard let panel else { return }
+        var frame = panel.frame
+        frame.origin.x += delta.width
+        frame.origin.y += delta.height
+        panel.setFrame(frame, display: true)
+        savePosition()
+    }
+
+    /// Keep the top right corner in place: this window lives against the menu
+    /// bar, and growing towards the screen edge would push it off.
+    func applyAdvancedMode() {
+        guard let panel else { return }
+        let size = Self.size(advanced: store.advanced)
+        guard panel.frame.size != size else { return }
+        var frame = panel.frame
+        frame.size = size
+        frame.origin = CGPoint(x: frame.maxX - size.width, y: frame.maxY - size.height)
+        panel.setFrame(frame, display: true)
+        savePosition()
     }
 }
 

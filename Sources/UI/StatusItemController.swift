@@ -13,7 +13,7 @@ private func trace(_ text: String) {
     }
 }
 
-final class StatusItemController: NSObject, NSWindowDelegate {
+final class StatusItemController: NSObject {
     private let item: NSStatusItem
     private let store = QuikStore()
     private let chrome = PanelChrome()
@@ -26,10 +26,15 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] != nil
     private var panelWindow: NSPanel?
     private var panelHost: NSHostingView<PanelView>?
-    private var panelPlacement: PanelPlacement = .below(.zero)
+    private var panelPlacement: PanelPlacement = .centered
     private var outsideClickMonitor: Any?
+    private var panelDragMonitor: Any?
+    private var panelDragPoint: NSPoint?
 
+    /// The panel either hangs off the floating window, sits under the menu bar
+    /// item, or floats alone in the middle. Only the first case is a pair.
     private enum PanelPlacement {
+        case attached(edge: PanelArrow.Edge)
         case below(NSRect)
         case centered
     }
@@ -67,7 +72,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         if ProcessInfo.processInfo.environment["QUIK_NO_HUD"] != "1" {
             let hud = HUDController(
                 store: store,
-                onTap: { [weak self] in self?.showPanel(recordFrame: false) },
+                onTap: { [weak self] in self?.togglePanel() },
                 onToggleVisibility: { [weak self] in self?.toggleHUD() }
             )
             self.hud = hud
@@ -177,12 +182,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
-        window.delegate = self
         host.frame = NSRect(x: 0, y: 0, width: 400, height: height)
         host.autoresizingMask = [.width, .height]
         window.contentView = host
         panelHost = host
         panelWindow = window
+        installPanelDragMonitor()
         return window
     }
 
@@ -224,7 +229,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard abs(window.frame.height - size.height) > 0.5 else { return }
         window.setContentSize(size)
         if window.isVisible {
-            positionPanel(window, placement: panelPlacement)
+            if case .attached = panelPlacement {
+                // Keep the edge that faces the floating window pinned; the
+                // horizontal position is the user's now, not a fresh centring.
+                pinAttachedEdge(window)
+            } else {
+                positionPanel(window, placement: panelPlacement)
+            }
         }
     }
 
@@ -270,6 +281,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func toggleAdvanced() {
         store.advanced.toggle()
+        hud?.applyAdvancedMode()
+        if let window = panelWindow, window.isVisible, case .attached = panelPlacement {
+            positionPanel(window, placement: panelPlacement)
+            chrome.arrow = arrowPlacement(for: panelPlacement)
+        }
         rebuildPanel()
     }
 
@@ -281,6 +297,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func hidePanel() {
         guard let window = panelWindow, window.isVisible else { return }
+        detachPanel()
         window.orderOut(nil)
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
@@ -312,17 +329,21 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 
-    // NSPopover picks its own origin when the content changes height, and on
-    // macOS 26 that can drift sideways or climb over the floating window. Pin
-    // the top edge just below the floating window (or the status item) so a
-    // taller panel grows downward from the same place.
+    // The panel's top edge is pinned to the anchor, so a taller panel grows
+    // downward from the same place.
     private func positionPanel(_ window: NSWindow, placement: PanelPlacement) {
         guard let screen = window.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
+        let gap: CGFloat = 8
         var frame = window.frame
         switch placement {
+        case .attached(let edge):
+            guard let hudFrame = hud?.frame else { return }
+            frame.origin.x = clampedX(anchorMidX: hudFrame.midX, width: frame.width, visible: visible)
+            frame.origin.y = edge == .top
+                ? hudFrame.minY - frame.height - gap
+                : hudFrame.maxY + gap
         case .below(let anchor):
-            let gap: CGFloat = 8
             frame.origin.x = clampedX(anchorMidX: anchor.midX, width: frame.width, visible: visible)
             let below = anchor.minY - frame.height - gap
             let above = anchor.maxY + gap
@@ -340,6 +361,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         window.setFrame(frame, display: true)
     }
 
+    private func pinAttachedEdge(_ window: NSWindow) {
+        guard case .attached(let edge) = panelPlacement, let hudFrame = hud?.frame else { return }
+        let gap: CGFloat = 8
+        var frame = window.frame
+        frame.origin.y = edge == .top ? hudFrame.minY - frame.height - gap : hudFrame.maxY + gap
+        window.setFrame(frame, display: true)
+    }
+
     private func clampedX(anchorMidX: CGFloat, width: CGFloat, visible: NSRect) -> CGFloat {
         let gap: CGFloat = 8
         return min(max(anchorMidX - width / 2, visible.minX + gap), visible.maxX - width - gap)
@@ -348,24 +377,59 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     // Only the floating window gets an arrow. The tip has to land on its
     // centre, which is not the panel's centre once the panel is clamped at a
     // screen edge.
-    private func arrowOffset(for placement: PanelPlacement) -> CGFloat? {
-        guard case let .below(anchor) = placement,
-              store.hudVisible, hud?.frame != nil, hud?.anchorView != nil,
-              let visible = (panelWindow?.screen ?? NSScreen.main)?.visibleFrame else { return nil }
-        let x = clampedX(anchorMidX: anchor.midX, width: 400, visible: visible)
-        return anchor.midX - x
+    private func arrowPlacement(for placement: PanelPlacement) -> PanelArrow? {
+        guard case .attached(let edge) = placement,
+              let hudFrame = hud?.frame, let window = panelWindow else { return nil }
+        return PanelArrow(offset: hudFrame.midX - window.frame.minX, edge: edge)
     }
 
-    // The arrow says "this panel belongs to the floating window". Once the
-    // header has been dragged sideways it points at nothing, so drop it.
-    // Programmatic positioning keeps the tip on the window's centre and leaves
-    // it alone.
-    func windowDidMove(_ notification: Notification) {
-        guard let window = panelWindow, (notification.object as? NSWindow) === window,
-              let offset = chrome.arrowOffset,
-              let hudFrame = hud?.frame, store.hudVisible else { return }
-        if abs(window.frame.minX + offset - hudFrame.midX) > 1 {
-            chrome.arrowOffset = nil
+    // The authoritative way to keep two windows together: make one a child of
+    // the other. AppKit moves a child with its parent inside the window
+    // server, so dragging the floating window moves the panel with no redraw
+    // lag at all. The other direction drives the parent from the panel's
+    // header, and the child rides along in the same transaction.
+    private func attachPanel() {
+        guard case .attached = panelPlacement,
+              let window = panelWindow, let hudWindow = hud?.window else { return }
+        if window.parent !== hudWindow {
+            hudWindow.addChildWindow(window, ordered: .below)
+        }
+        // The header drag below owns the motion while attached.
+        window.isMovableByWindowBackground = false
+    }
+
+    private func detachPanel() {
+        guard let window = panelWindow else { return }
+        if let parent = window.parent { parent.removeChildWindow(window) }
+        window.isMovableByWindowBackground = true
+        panelDragPoint = nil
+    }
+
+    private func installPanelDragMonitor() {
+        guard panelDragMonitor == nil else { return }
+        panelDragMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            guard let self, case .attached = self.panelPlacement,
+                  let window = self.panelWindow, event.window === window else { return event }
+            let point = NSEvent.mouseLocation
+            switch event.type {
+            case .leftMouseDown:
+                let frame = window.frame
+                // Header only, left of the language and close buttons.
+                if point.y >= frame.maxY - 56, point.x <= frame.maxX - 140 {
+                    self.panelDragPoint = point
+                }
+            case .leftMouseDragged:
+                guard let last = self.panelDragPoint else { break }
+                self.panelDragPoint = point
+                self.hud?.move(by: CGSize(width: point.x - last.x, height: point.y - last.y))
+            case .leftMouseUp:
+                self.panelDragPoint = nil
+            default:
+                break
+            }
+            return event
         }
     }
 
@@ -374,6 +438,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             store.hudVisible = visible
         }
         syncHUD()
+        // The pair only exists while the floating window is there. With it
+        // gone, the open panel falls back to the status item.
+        guard !visible, let window = panelWindow, window.isVisible,
+              case .attached = panelPlacement else { return }
+        detachPanel()
+        panelPlacement = placement(for: window)
+        positionPanel(window, placement: panelPlacement)
+        chrome.arrow = arrowPlacement(for: panelPlacement)
     }
 
     private func toggleHUD() {
@@ -465,12 +537,30 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         NSApp.terminate(nil)
     }
 
+    private func togglePanel() {
+        if panelWindow?.isVisible == true {
+            hidePanel()
+        } else {
+            showPanel(recordFrame: false)
+        }
+    }
+
     private func showPanel(recordFrame: Bool) {
         NSApp.activate(ignoringOtherApps: true)
         let window = panelWindow ?? makePanelWindow()
-        panelPlacement = placement(for: window)
-        chrome.arrowOffset = arrowOffset(for: panelPlacement)
-        positionPanel(window, placement: panelPlacement)
+        if window.isVisible {
+            // A content rebuild must not undo a drag the user made.
+            pinAttachedEdge(window)
+        } else {
+            panelPlacement = placement(for: window)
+            positionPanel(window, placement: panelPlacement)
+        }
+        chrome.arrow = arrowPlacement(for: panelPlacement)
+        if case .attached = panelPlacement {
+            attachPanel()
+        } else {
+            detachPanel()
+        }
         window.orderFrontRegardless()
         installOutsideClickMonitor()
         trace("showPanel: placement=\(panelPlacement) window=\(window.frame)")
@@ -488,7 +578,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func placement(for window: NSWindow) -> PanelPlacement {
         if store.hudVisible, let hudFrame = hud?.frame, hud?.anchorView != nil {
-            return .below(hudFrame)
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+            let fitsBelow = hudFrame.minY - window.frame.height - 8 >= visible.minY + 8
+            return .attached(edge: fitsBelow ? .top : .bottom)
         }
         if isStatusItemCrowdedOut() {
             return .centered
@@ -517,6 +609,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             guard let screen = window.screen else { return }
             let point = NSEvent.mouseLocation
             if point.y > screen.visibleFrame.maxY { return }
+            // The floating window is the pair's handle; its own click toggles
+            // the panel, so it is not an outside click.
+            if self.store.hudVisible, let hudFrame = self.hud?.frame, hudFrame.contains(point) { return }
             if !window.frame.contains(point) {
                 self.hidePanel()
             }
