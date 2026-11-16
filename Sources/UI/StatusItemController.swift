@@ -425,19 +425,31 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let screenRect = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
         trace("showPopover: button screen=\(screenRect) safeTop=\(button.window?.screen?.safeAreaInsets.top ?? -1)")
-        let anchorRect: NSRect
+        var anchorRect: NSRect
         if store.hudVisible, let anchor = hud?.anchorView, let hudFrame = hud?.frame {
             anchorRect = hudFrame
             popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         } else {
+            // A full menu bar pushes the status item next to the app menus, and
+            // the panel would open in the middle of the screen. Anchor it to the
+            // top right instead, where the floating window lives.
             anchorRect = screenRect
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
-        panelAnchor = anchorRect
         guard let window = popover.contentViewController?.view.window else {
             trace("showPopover: window nil")
             return
         }
+        if !store.hudVisible {
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+            anchorRect = NSRect(
+                x: visible.maxX - 28 - window.frame.width / 2,
+                y: visible.maxY - 36,
+                width: 1,
+                height: 1
+            )
+        }
+        panelAnchor = anchorRect
         positionPanel(window, near: anchorRect)
         trace("showPopover: window \(window.frame)")
         clampToScreen(window)
