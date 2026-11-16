@@ -104,6 +104,35 @@ else
   fail=1
 fi
 
+echo "--- 程序坞图标开关"
+panel_present() {
+  swift scripts/window-bounds.swift Quik 2>/dev/null \
+    | sed -n 's/^window=.*cg=(x:-\{0,1\}[0-9]* y:-\{0,1\}[0-9]* w:\([0-9]*\) h:\([0-9]*\)).*/\1 \2/p' \
+    | awk '$1 > 300 && $1 < 500 { found = 1 } END { print found + 0 }'
+}
+# The preview starts with the panel open, so close it to begin from a known
+# state.
+launch QUIK_CLOSE_PANEL=1
+sleep 1
+start="$(panel_present)"
+swift scripts/dock-tile.swift Quik >/dev/null
+sleep 1
+opened="$(panel_present)"
+swift scripts/dock-tile.swift Quik >/dev/null
+sleep 1
+closed="$(panel_present)"
+swift scripts/dock-tile.swift Quik >/dev/null
+sleep 1
+reopened="$(panel_present)"
+# One click must leave the panel in the other state and keep it there. The
+# click that closed and immediately reopened it looked like a miss.
+if [ "$start" = "0" ] && [ "$opened" = "1" ] && [ "$closed" = "0" ] && [ "$reopened" = "1" ]; then
+  echo "PASS 程序坞图标开关面板"
+else
+  echo "FAIL 程序坞图标开关面板 (初始=$start 开=$opened 关=$closed 再开=$reopened)"
+  fail=1
+fi
+
 defaults write "$BUNDLE_ID" advancedMode -bool false
 launch QUIK_TOGGLE_ADVANCED=1
 sleep 1
