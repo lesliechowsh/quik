@@ -45,6 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationDidResignActive(_ notification: Notification) {
+        statusController?.panelDidResignActive()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         StatusFile.remove()
     }

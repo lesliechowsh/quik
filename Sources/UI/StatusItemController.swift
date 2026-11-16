@@ -27,7 +27,6 @@ final class StatusItemController: NSObject {
     private var panelWindow: NSPanel?
     private var panelHost: NSHostingView<PanelView>?
     private var panelPlacement: PanelPlacement = .centered
-    private var outsideClickMonitor: Any?
     private var panelDragMonitor: Any?
     private var panelDragPoint: NSPoint?
 
@@ -299,10 +298,6 @@ final class StatusItemController: NSObject {
         guard let window = panelWindow, window.isVisible else { return }
         detachPanel()
         window.orderOut(nil)
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
         guard restoreHUDAfterPanel, !suppressHUDRestore else { return }
         restoreHUDAfterPanel = false
         syncHUD()
@@ -564,7 +559,6 @@ final class StatusItemController: NSObject {
             detachPanel()
         }
         window.orderFrontRegardless()
-        installOutsideClickMonitor()
         trace("showPanel: placement=\(panelPlacement) window=\(window.frame)")
         if let hud, store.hudVisible, let hudFrame = hud.frame, hudFrame.intersects(window.frame) {
             restoreHUDAfterPanel = true
@@ -604,19 +598,11 @@ final class StatusItemController: NSObject {
         return statusItemRect().midX < screen.visibleFrame.midX
     }
 
-    private func installOutsideClickMonitor() {
-        guard outsideClickMonitor == nil else { return }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self, let window = self.panelWindow, window.isVisible else { return }
-            guard let screen = window.screen else { return }
-            let point = NSEvent.mouseLocation
-            if point.y > screen.visibleFrame.maxY { return }
-            // The floating window is the pair's handle; its own click toggles
-            // the panel, so it is not an outside click.
-            if self.store.hudVisible, let hudFrame = self.hud?.frame, hudFrame.contains(point) { return }
-            if !window.frame.contains(point) {
-                self.hidePanel()
-            }
-        }
+    /// Clicking outside closes the panel. The app resigning active is that
+    /// click, and it is the only signal that does not also fire when the user
+    /// clicks Quik's own Dock tile. Watching raw mouse-downs instead closed the
+    /// panel and then the Dock's reopen reopened it, so one click flickered.
+    func panelDidResignActive() {
+        hidePanel()
     }
 }
