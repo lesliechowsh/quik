@@ -25,6 +25,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private var suppressHUDRestore = false
     private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] != nil
     private var panelAnchor: NSRect = .zero
+    private var panelAnchorWindow: NSWindow?
     private let dockIcon = DockIconController()
 
     init(preview: String? = nil) {
@@ -265,6 +266,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        panelAnchorWindow?.orderOut(nil)
         guard restoreHUDAfterPanel, !suppressHUDRestore else { return }
         restoreHUDAfterPanel = false
         syncHUD()
@@ -420,6 +422,27 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         NSApp.terminate(nil)
     }
 
+    // NSPopover needs a visible view to point at. This one sits at the top
+    // right and draws nothing, so the arrow and the click-outside area stay
+    // correct without moving the popover window by hand.
+    private func makeAnchorWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.isReleasedWhenClosed = false
+        panelAnchorWindow = window
+        return window
+    }
+
     private func showPopover(recordFrame: Bool) {
         guard let button = item.button else { return }
         NSApp.activate(ignoringOtherApps: true)
@@ -430,24 +453,23 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             anchorRect = hudFrame
             popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         } else {
-            // A full menu bar pushes the status item next to the app menus, and
-            // the panel would open in the middle of the screen. Anchor it to the
-            // top right instead, where the floating window lives.
-            anchorRect = screenRect
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // A full menu bar pushes the status item next to the app menus, so
+            // the panel would open in the middle of the screen. Move the popover
+            // only by giving it a real anchor at the top right: moving its window
+            // afterwards leaves the arrow and the click-outside area behind.
+            let screen = button.window?.screen ?? NSScreen.main
+            let visible = screen?.visibleFrame ?? .zero
+            let point = NSPoint(x: visible.maxX - 28, y: visible.maxY - 34)
+            let anchorWindow = panelAnchorWindow ?? makeAnchorWindow()
+            anchorWindow.setFrame(NSRect(origin: point, size: NSSize(width: 1, height: 1)), display: false)
+            anchorWindow.orderFrontRegardless()
+            anchorRect = NSRect(origin: point, size: NSSize(width: 1, height: 1))
+            let anchor = anchorWindow.contentView!
+            popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         }
         guard let window = popover.contentViewController?.view.window else {
             trace("showPopover: window nil")
             return
-        }
-        if !store.hudVisible {
-            let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
-            anchorRect = NSRect(
-                x: visible.maxX - 28 - window.frame.width / 2,
-                y: visible.maxY - 36,
-                width: 1,
-                height: 1
-            )
         }
         panelAnchor = anchorRect
         positionPanel(window, near: anchorRect)
