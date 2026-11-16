@@ -221,6 +221,7 @@ enum Copy {
     static func advancedMode(_ t: CopyTable = .ui) -> String { t.string("Advanced Mode") }
     static func quit(_ t: CopyTable = .ui) -> String { t.string("Quit") }
     static func cancel(_ t: CopyTable = .ui) -> String { t.string("Cancel") }
+    static func close(_ t: CopyTable = .ui) -> String { t.string("Close") }
     static func sample(_ t: CopyTable = .ui) -> String { t.string("See what it is doing (3 s)") }
     static func saveFirstHint(_ t: CopyTable = .ui) -> String { t.string("Save your work before quitting.") }
     static func currentState(_ t: CopyTable = .ui) -> String { t.string("Current state") }

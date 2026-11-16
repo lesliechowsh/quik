@@ -13,10 +13,10 @@ private func trace(_ text: String) {
     }
 }
 
-final class StatusItemController: NSObject, NSPopoverDelegate {
+final class StatusItemController: NSObject, NSWindowDelegate {
     private let item: NSStatusItem
-    private let popover = NSPopover()
     private let store = QuikStore()
+    private let chrome = PanelChrome()
     private let engine = MonitorEngine()
     private var hud: HUDController?
     private var lastTitle = ""
@@ -24,8 +24,15 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private var restoreHUDAfterPanel = false
     private var suppressHUDRestore = false
     private var showingAgentInstall = ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] != nil
-    private var panelAnchor: NSRect = .zero
-    private var panelAnchorWindow: NSWindow?
+    private var panelWindow: NSPanel?
+    private var panelHost: NSHostingView<PanelView>?
+    private var panelPlacement: PanelPlacement = .below(.zero)
+    private var outsideClickMonitor: Any?
+
+    private enum PanelPlacement {
+        case below(NSRect)
+        case centered
+    }
     private let dockIcon = DockIconController()
 
     init(preview: String? = nil) {
@@ -45,11 +52,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
         )
 
-        popover.behavior = .transient
-        popover.animates = false
-        popover.delegate = self
-        popover.contentViewController = Self.panelController(panel())
-
         engine.onUpdate = { [weak self] assessment, history in
             guard let self else { return }
             let advanced = QuikStore.advancedMode
@@ -65,7 +67,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if ProcessInfo.processInfo.environment["QUIK_NO_HUD"] != "1" {
             let hud = HUDController(
                 store: store,
-                onTap: { [weak self] in self?.showPopover(recordFrame: false) },
+                onTap: { [weak self] in self?.showPanel(recordFrame: false) },
                 onToggleVisibility: { [weak self] in self?.toggleHUD() }
             )
             self.hud = hud
@@ -86,7 +88,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         }
         if ProcessInfo.processInfo.environment["QUIK_CLOSE_PANEL"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-                self?.popover.performClose(nil)
+                self?.hidePanel()
             }
         }
         if ProcessInfo.processInfo.environment["QUIK_SHOW_HUD"] == "1" {
@@ -126,7 +128,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             store.apply(assessment, PreviewFixtures.history)
             updateTitle(assessment)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.showPopover(recordFrame: true)
+                self?.showPanel(recordFrame: true)
             }
             if ProcessInfo.processInfo.environment["QUIK_TOGGLE_ADVANCED"] == "1" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
@@ -149,30 +151,45 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
         if ProcessInfo.processInfo.environment["QUIK_SHOW_PANEL"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.showPopover(recordFrame: false)
+                self?.showPanel(recordFrame: false)
             }
         }
     }
 
-    // NSHostingController as popover content makes NSPopover place the window above the
-    // screen top on macOS 26. A plain controller with an explicit preferredContentSize
-    // keeps the placement inside the screen. Reproduce with /tmp/popover-probe.swift.
-    // The height comes from the view itself: translated text wraps to more lines
-    // than the Chinese original, and a fixed height would clip it.
-    private static func panelController(_ view: PanelView) -> NSViewController {
-        let host = NSHostingView(rootView: view)
+    // A borderless panel instead of NSPopover: the popover always draws an arrow
+    // that points at its anchor, and a full menu bar leaves no good anchor. This
+    // window can sit anywhere, has no arrow, and keeps the header draggable.
+    private func makePanelWindow() -> NSPanel {
+        let host = NSHostingView(rootView: panel())
         host.frame = NSRect(x: 0, y: 0, width: 400, height: 400)
         let height = max(ceil(host.fittingSize.height), 390)
+        let window = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: height),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.isMovableByWindowBackground = true
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.delegate = self
         host.frame = NSRect(x: 0, y: 0, width: 400, height: height)
-        let controller = NSViewController()
-        controller.view = host
-        controller.preferredContentSize = NSSize(width: 400, height: height)
-        return controller
+        host.autoresizingMask = [.width, .height]
+        window.contentView = host
+        panelHost = host
+        panelWindow = window
+        return window
     }
 
     private func panel() -> PanelView {
         PanelView(
             store: store,
+            chrome: chrome,
             onSample: { [weak self] culprit in
                 self?.store.setSampling(true)
                 CulpritActions.sample(culprit) { [weak self] _ in
@@ -192,21 +209,22 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             showingAgentInstall: showingAgentInstall,
             onShowAgentInstall: { [weak self] in self?.setAgentInstallVisible(true) },
             onCloseAgentInstall: { [weak self] in self?.setAgentInstallVisible(false) },
-            onContentHeight: { [weak self] height in self?.fitPanel(to: height) }
+            onContentHeight: { [weak self] height in self?.fitPanel(to: height) },
+            onClose: { [weak self] in self?.hidePanel() }
         )
     }
 
     // NSPopover keeps the size it was given. Content that grows after opening
     // (a tall translation, the first assessment, advanced mode) would be
     // clipped at the bottom, so the view reports its ideal height and the
-    // popover follows, staying pinned to the same anchor.
+    // panel follows, staying pinned to the same anchor.
     private func fitPanel(to height: CGFloat) {
+        guard let window = panelWindow else { return }
         let size = NSSize(width: 400, height: max(ceil(height), 390))
-        guard abs(popover.contentSize.height - size.height) > 0.5 else { return }
-        popover.contentSize = size
-        popover.contentViewController?.preferredContentSize = size
-        if popover.isShown, let window = popover.contentViewController?.view.window {
-            positionPanel(window, near: panelAnchor)
+        guard abs(window.frame.height - size.height) > 0.5 else { return }
+        window.setContentSize(size)
+        if window.isVisible {
+            positionPanel(window, placement: panelPlacement)
         }
     }
 
@@ -247,7 +265,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     func openPanel() {
-        showPopover(recordFrame: false)
+        showPanel(recordFrame: false)
     }
 
     private func toggleAdvanced() {
@@ -256,17 +274,18 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     private func rebuildPanel() {
-        suppressHUDRestore = true
-        popover.performClose(nil)
-        popover.contentViewController = Self.panelController(panel())
-        showPopover(recordFrame: false)
-        DispatchQueue.main.async { [weak self] in
-            self?.suppressHUDRestore = false
-        }
+        guard panelHost != nil else { return }
+        panelHost?.rootView = panel()
+        showPanel(recordFrame: false)
     }
 
-    func popoverDidClose(_ notification: Notification) {
-        panelAnchorWindow?.orderOut(nil)
+    private func hidePanel() {
+        guard let window = panelWindow, window.isVisible else { return }
+        window.orderOut(nil)
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
         guard restoreHUDAfterPanel, !suppressHUDRestore else { return }
         restoreHUDAfterPanel = false
         syncHUD()
@@ -281,7 +300,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         alert.addButton(withTitle: Copy.cancel())
         alert.alertStyle = .warning
         let confirmed = alert.runModal() == .alertFirstButtonReturn
-        guard confirmed else { return showPopover(recordFrame: false) }
+        guard confirmed else { return showPanel(recordFrame: false) }
         CulpritActions.quit(culprit) { [weak self] quit in
             if !quit {
                 let failed = NSAlert()
@@ -289,7 +308,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
                 failed.informativeText = Copy.quitFailedBody()
                 failed.runModal()
             }
-            self?.showPopover(recordFrame: false)
+            self?.showPanel(recordFrame: false)
         }
     }
 
@@ -297,33 +316,57 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     // macOS 26 that can drift sideways or climb over the floating window. Pin
     // the top edge just below the floating window (or the status item) so a
     // taller panel grows downward from the same place.
-    private func positionPanel(_ window: NSWindow, near anchor: NSRect) {
+    private func positionPanel(_ window: NSWindow, placement: PanelPlacement) {
         guard let screen = window.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let gap: CGFloat = 8
         var frame = window.frame
-        frame.origin.x = min(max(anchor.midX - frame.width / 2, visible.minX + gap), visible.maxX - frame.width - gap)
-        let below = anchor.minY - frame.height - gap
-        let above = anchor.maxY + gap
-        if below >= visible.minY + gap {
-            frame.origin.y = below
-        } else if above + frame.height <= visible.maxY - gap {
-            frame.origin.y = above
-        } else {
-            frame.origin.y = min(max(below, visible.minY + gap), visible.maxY - frame.height - gap)
+        switch placement {
+        case .below(let anchor):
+            let gap: CGFloat = 8
+            frame.origin.x = clampedX(anchorMidX: anchor.midX, width: frame.width, visible: visible)
+            let below = anchor.minY - frame.height - gap
+            let above = anchor.maxY + gap
+            if below >= visible.minY + gap {
+                frame.origin.y = below
+            } else if above + frame.height <= visible.maxY - gap {
+                frame.origin.y = above
+            } else {
+                frame.origin.y = min(max(below, visible.minY + gap), visible.maxY - frame.height - gap)
+            }
+        case .centered:
+            frame.origin.x = visible.midX - frame.width / 2
+            frame.origin.y = visible.midY - frame.height / 2
         }
         window.setFrame(frame, display: true)
     }
 
-    private func clampToScreen(_ window: NSWindow) {
-        guard let screen = window.screen ?? NSScreen.main else { return }
-        let visible = screen.visibleFrame
-        var frame = window.frame
-        guard !visible.contains(frame) else { return }
-        frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
-        frame.origin.y = max(min(frame.minY, visible.maxY - frame.height), visible.minY)
-        window.setFrame(frame, display: true)
-        trace("showPopover: clamped to \(frame)")
+    private func clampedX(anchorMidX: CGFloat, width: CGFloat, visible: NSRect) -> CGFloat {
+        let gap: CGFloat = 8
+        return min(max(anchorMidX - width / 2, visible.minX + gap), visible.maxX - width - gap)
+    }
+
+    // Only the floating window gets an arrow. The tip has to land on its
+    // centre, which is not the panel's centre once the panel is clamped at a
+    // screen edge.
+    private func arrowOffset(for placement: PanelPlacement) -> CGFloat? {
+        guard case let .below(anchor) = placement,
+              store.hudVisible, hud?.frame != nil, hud?.anchorView != nil,
+              let visible = (panelWindow?.screen ?? NSScreen.main)?.visibleFrame else { return nil }
+        let x = clampedX(anchorMidX: anchor.midX, width: 400, visible: visible)
+        return anchor.midX - x
+    }
+
+    // The arrow says "this panel belongs to the floating window". Once the
+    // header has been dragged sideways it points at nothing, so drop it.
+    // Programmatic positioning keeps the tip on the window's centre and leaves
+    // it alone.
+    func windowDidMove(_ notification: Notification) {
+        guard let window = panelWindow, (notification.object as? NSWindow) === window,
+              let offset = chrome.arrowOffset,
+              let hudFrame = hud?.frame, store.hudVisible else { return }
+        if abs(window.frame.minX + offset - hudFrame.midX) > 1 {
+            chrome.arrowOffset = nil
+        }
     }
 
     private func setHUDVisible(_ visible: Bool) {
@@ -351,10 +394,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             showStatusMenu(event)
             return
         }
-        if popover.isShown {
-            popover.performClose(nil)
+        if panelWindow?.isVisible == true {
+            hidePanel()
         } else {
-            showPopover(recordFrame: false)
+            showPanel(recordFrame: false)
         }
     }
 
@@ -392,7 +435,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func openPanelAction() {
-        showPopover(recordFrame: false)
+        showPanel(recordFrame: false)
     }
 
     @objc private func toggleHUDAction() {
@@ -422,65 +465,15 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         NSApp.terminate(nil)
     }
 
-    // NSPopover needs a visible view to point at. This one sits at the top
-    // right and draws nothing, so the arrow and the click-outside area stay
-    // correct without moving the popover window by hand.
-    private func makeAnchorWindow() -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.alphaValue = 0
-        window.ignoresMouseEvents = true
-        window.level = .statusBar
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        window.isReleasedWhenClosed = false
-        panelAnchorWindow = window
-        return window
-    }
-
-    private func showPopover(recordFrame: Bool) {
-        guard let button = item.button else { return }
+    private func showPanel(recordFrame: Bool) {
         NSApp.activate(ignoringOtherApps: true)
-        let screenRect = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
-        trace("showPopover: button screen=\(screenRect) safeTop=\(button.window?.screen?.safeAreaInsets.top ?? -1)")
-        var anchorRect: NSRect
-        if store.hudVisible, let anchor = hud?.anchorView, let hudFrame = hud?.frame {
-            anchorRect = hudFrame
-            popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
-        } else {
-            // A full menu bar pushes the status item next to the app menus, so
-            // the panel would open in the middle of the screen. Move the popover
-            // only by giving it a real anchor at the top right: moving its window
-            // afterwards leaves the arrow and the click-outside area behind.
-            let screen = button.window?.screen ?? NSScreen.main
-            let visible = screen?.visibleFrame ?? .zero
-            let point = NSPoint(x: visible.maxX - 28, y: visible.maxY - 34)
-            let anchorWindow = panelAnchorWindow ?? makeAnchorWindow()
-            anchorWindow.setFrame(NSRect(origin: point, size: NSSize(width: 1, height: 1)), display: false)
-            anchorWindow.orderFrontRegardless()
-            anchorRect = NSRect(origin: point, size: NSSize(width: 1, height: 1))
-            let anchor = anchorWindow.contentView!
-            popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
-        }
-        guard let window = popover.contentViewController?.view.window else {
-            trace("showPopover: window nil")
-            return
-        }
-        panelAnchor = anchorRect
-        positionPanel(window, near: anchorRect)
-        trace("showPopover: window \(window.frame)")
-        clampToScreen(window)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, let w = self.popover.contentViewController?.view.window else { return }
-            trace("showPopover: settled window \(w.frame) visible=\(w.occlusionState.contains(.visible))")
-        }
-        window.level = .statusBar
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        let window = panelWindow ?? makePanelWindow()
+        panelPlacement = placement(for: window)
+        chrome.arrowOffset = arrowOffset(for: panelPlacement)
+        positionPanel(window, placement: panelPlacement)
+        window.orderFrontRegardless()
+        installOutsideClickMonitor()
+        trace("showPanel: placement=\(panelPlacement) window=\(window.frame)")
         if let hud, store.hudVisible, let hudFrame = hud.frame, hudFrame.intersects(window.frame) {
             restoreHUDAfterPanel = true
             hud.hide()
@@ -490,6 +483,43 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             let text = "\(number)"
             try? text.write(toFile: "/tmp/quik-panel-windowid.txt", atomically: true, encoding: String.Encoding.utf8)
             trace("window id recorded \(text)")
+        }
+    }
+
+    private func placement(for window: NSWindow) -> PanelPlacement {
+        if store.hudVisible, let hudFrame = hud?.frame, hud?.anchorView != nil {
+            return .below(hudFrame)
+        }
+        if isStatusItemCrowdedOut() {
+            return .centered
+        }
+        return .below(statusItemRect())
+    }
+
+    private func statusItemRect() -> NSRect {
+        guard let button = item.button, let window = button.window else { return .zero }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    // A full menu bar pushes the status item next to the app menus, on the left
+    // half of the screen. That is the signal to center the panel instead.
+    private func isStatusItemCrowdedOut() -> Bool {
+        guard let button = item.button,
+              let window = button.window,
+              let screen = window.screen ?? NSScreen.main else { return false }
+        return statusItemRect().midX < screen.visibleFrame.midX
+    }
+
+    private func installOutsideClickMonitor() {
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard let self, let window = self.panelWindow, window.isVisible else { return }
+            guard let screen = window.screen else { return }
+            let point = NSEvent.mouseLocation
+            if point.y > screen.visibleFrame.maxY { return }
+            if !window.frame.contains(point) {
+                self.hidePanel()
+            }
         }
     }
 }

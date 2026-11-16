@@ -62,6 +62,7 @@
 "Advanced Mode" = "詳細モード";
 "Quit" = "終了";
 "Cancel" = "キャンセル";
+"Close" = "閉じる";
 "See what it is doing (3 s)" = "何をしているか見る（3 秒）";
 "Save your work before quitting." = "終了する前に編集中の内容を保存してください。";
 "Current state" = "現在の状態";

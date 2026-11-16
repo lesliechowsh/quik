@@ -38,15 +38,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# A popover window is the 400 point panel plus a 13 point shadow border on each
-# side, so 426 points wide. The capture's width over 426 gives the backing scale.
-# The inset skips that border, the popover arrow drawn in it, and the rounded
-# corner shading that bleeds a few pixels into the content. The 24 point margin
-# requirement is still below the 16 point content padding plus the border, so a
-# passing check means the copy itself had room inside the panel.
-BORDER_POINTS=13
-SIDE_POINTS=23
-MARGIN_POINTS=24
+# The panel window is 400 points wide, and the capture adds at most two pixels of
+# edge. Integer division by 400 gives the backing scale. A borderless window has
+# no shadow border, but its 12 point rounded corners blend white into the
+# transparent backdrop, and premultiplied partial pixels read as ink. The inset
+# skips that corner band only; the margin is then below the 16 point content
+# padding, so a clipped or overflowing line still lands outside it.
+SIDE_POINTS=14
+MARGIN_POINTS=15
 
 check_view() {
   local language="$1" view="$2" state="$3" extra_env="$4" advanced="$5"
@@ -100,7 +99,7 @@ check_view() {
     pkill -x Quik 2>/dev/null || true
     return
   fi
-  local scale=$(( width / 426 ))
+  local scale=$(( width / 400 ))
   [ "$scale" -ge 1 ] || scale=1
   local inset=$(( SIDE_POINTS * scale ))
   local margin=$(( MARGIN_POINTS * scale ))
@@ -128,8 +127,11 @@ check_view() {
   # capsule with a globe, the current language, and a chevron. Size, position,
   # and a tinted fill behind it make it read as a control, not a label. Probes
   # read one pixel each because a 7 percent fill sits below the ink threshold.
-  local region_x=$(( 260 * scale )) region_y=$(( 20 * scale ))
-  local region_w=$(( 150 * scale )) region_h=$(( 45 * scale ))
+  # The close button sits to the right of the picker, so the region ends before
+  # it at 360 points. The band stops above the summary line, which otherwise
+  # merges with the capsule into one wide box.
+  local region_x=$(( 240 * scale )) region_y=$(( 12 * scale ))
+  local region_w=$(( 120 * scale )) region_h=$(( 36 * scale ))
   local chip cx cy cw ch
   chip="$(swift scripts/image-ink.swift "$png" --inset "$inset" \
     --region "$region_x,$region_y,$region_w,$region_h")"
@@ -143,9 +145,9 @@ check_view() {
       || problems+=("language control ${cw}px wide")
     { [ "$ch" -ge $(( 10 * scale )) ] && [ "$ch" -le $(( 18 * scale )) ]; } \
       || problems+=("language control ${ch}px tall")
-    { [ "$chip_right" -ge $(( 370 * scale )) ] && [ "$chip_right" -le $(( 400 * scale )) ]; } \
+    { [ "$chip_right" -ge $(( 338 * scale )) ] && [ "$chip_right" -le $(( 352 * scale )) ]; } \
       || problems+=("language control ends at ${chip_right}px")
-    { [ "$cy" -ge $(( 28 * scale )) ] && [ "$cy" -le $(( 42 * scale )) ]; } \
+    { [ "$cy" -ge $(( 18 * scale )) ] && [ "$cy" -le $(( 40 * scale )) ]; } \
       || problems+=("language control starts at ${cy}px")
     local fill inside outside
     fill="$(swift scripts/image-ink.swift "$png" \
@@ -175,7 +177,7 @@ done
 ink_percent() {
   local file="$1" wide scale
   wide="$(swift scripts/image-ink.swift "$file" | sed -n 's/^ink [0-9.]*% (\([0-9]*\)x.*$/\1/p')"
-  scale=$(( wide / 426 ))
+  scale=$(( wide / 400 ))
   [ "$scale" -ge 1 ] || scale=1
   swift scripts/image-ink.swift "$file" --inset $(( SIDE_POINTS * scale )) \
     | sed -n 's/^ink \([0-9.]*\)%.*$/\1/p'
@@ -193,10 +195,10 @@ same_ink() {
 chip_box() {
   local file="$1" wide scale
   wide="$(swift scripts/image-ink.swift "$file" | sed -n 's/^ink [0-9.]*% (\([0-9]*\)x.*$/\1/p')"
-  scale=$(( wide / 426 ))
+  scale=$(( wide / 400 ))
   [ "$scale" -ge 1 ] || scale=1
   swift scripts/image-ink.swift "$file" --inset $(( SIDE_POINTS * scale )) \
-    --region $(( 260 * scale )),$(( 20 * scale )),$(( 150 * scale )),$(( 45 * scale )) \
+    --region $(( 240 * scale )),$(( 12 * scale )),$(( 120 * scale )),$(( 36 * scale )) \
     | sed -n 's/.*bbox=(\([0-9]*\),\([0-9]*\) \([0-9]*\)x\([0-9]*\)).*/\1 \2 \3 \4/p'
 }
 

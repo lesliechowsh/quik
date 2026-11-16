@@ -110,6 +110,7 @@ struct AgentInstallView: View {
     var language: AppLanguage
     var onLanguageChange: (AppLanguage) -> Void
     var onBack: () -> Void
+    var onClose: () -> Void = {}
     private let previewState: SkillState?
     @State private var state: SkillState
 
@@ -117,20 +118,23 @@ struct AgentInstallView: View {
         language: AppLanguage = .stored,
         onLanguageChange: @escaping (AppLanguage) -> Void = { _ in },
         onBack: @escaping () -> Void,
+        onClose: @escaping () -> Void = {},
         previewState: SkillState? = nil
     ) {
         self.language = language
         self.onLanguageChange = onLanguageChange
         self.onBack = onBack
+        self.onClose = onClose
         self.previewState = previewState
         _state = State(initialValue: previewState ?? .absent)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Spacer()
                 LanguageMenu(language: language, onChange: onLanguageChange)
+                PanelCloseButton(action: onClose)
             }
             Text(Copy.agentTitle())
                 .font(.system(size: 26, weight: .bold))

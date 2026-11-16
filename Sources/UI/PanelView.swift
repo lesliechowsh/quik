@@ -7,8 +7,16 @@ private struct PanelHeightKey: PreferenceKey {
     }
 }
 
+/// Window-owned state the panel shows but does not control. Published rather
+/// than passed as a value so the arrow can move without rebuilding the tree,
+/// which would reset the install page's local state.
+final class PanelChrome: ObservableObject {
+    @Published var arrowOffset: CGFloat?
+}
+
 struct PanelView: View {
     @ObservedObject var store: QuikStore
+    @ObservedObject var chrome: PanelChrome
     var onSample: (Culprit) -> Void
     var onQuit: (Culprit) -> Void
     var onActivityMonitor: () -> Void
@@ -19,6 +27,7 @@ struct PanelView: View {
     var onShowAgentInstall: () -> Void = {}
     var onCloseAgentInstall: () -> Void = {}
     var onContentHeight: (CGFloat) -> Void = { _ in }
+    var onClose: () -> Void = {}
 
     private static var agentPreviewState: SkillState? {
         switch ProcessInfo.processInfo.environment["QUIK_PREVIEW_AGENT"] {
@@ -37,19 +46,30 @@ struct PanelView: View {
     // fixedSize reports the ideal height instead of the frame the popover
     // happens to have, and the geometry reader hands it to the controller.
     var body: some View {
-        Group {
-            if showingAgentInstall {
-                AgentInstallView(
-                    language: store.language,
-                    onLanguageChange: onLanguageChange,
-                    onBack: onCloseAgentInstall,
-                    previewState: PanelView.agentPreviewState
-                )
-            } else {
-                mainPanel
+        VStack(spacing: 0) {
+            if let arrowOffset = chrome.arrowOffset {
+                PanelArrow()
+                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .frame(width: 16, height: 8)
+                    .padding(.leading, max(arrowOffset - 8, 0))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            Group {
+                if showingAgentInstall {
+                    AgentInstallView(
+                        language: store.language,
+                        onLanguageChange: onLanguageChange,
+                        onBack: onCloseAgentInstall,
+                        onClose: onClose,
+                        previewState: PanelView.agentPreviewState
+                    )
+                } else {
+                    mainPanel
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
@@ -110,6 +130,7 @@ struct PanelView: View {
                 }
                 Spacer(minLength: 4)
                 LanguageMenu(language: store.language, onChange: onLanguageChange)
+                PanelCloseButton(action: onClose)
             }
             Text(summary)
                 .font(.callout)
@@ -224,6 +245,36 @@ struct PanelView: View {
                     .font(.caption)
             }
         }
+    }
+}
+
+// A borderless window has no popover arrow, so the panel draws one when it
+// hangs below the floating window. The base sits on the card's top edge and
+// the shape is filled with the same colour, so the two read as one piece.
+private struct PanelArrow: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct PanelCloseButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.primary.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .help(Copy.close())
     }
 }
 
