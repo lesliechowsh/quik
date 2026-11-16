@@ -189,29 +189,29 @@ struct HUDView: View {
     }
 
     var body: some View {
-        HStack(spacing: 3) {
-            Circle()
+        HStack(spacing: 0) {
+            Rectangle()
                 .fill(accent)
-                .frame(width: 5, height: 5)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(store.advanced ? "\(assessment.score)  \(Copy.level(assessment.level))" : Copy.level(assessment.level))
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                .frame(width: 5)
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.advanced ? "\(assessment.score)  \(Copy.level(assessment.level))" : Copy.level(assessment.level))
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                    Text(detail)
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .stroke(.white.opacity(0.10), lineWidth: 1)
