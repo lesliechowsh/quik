@@ -537,7 +537,9 @@ final class StatusItemController: NSObject {
         NSApp.terminate(nil)
     }
 
-    private func togglePanel() {
+    /// The floating window, the Dock icon, and the status item all toggle the
+    /// same panel. The menu item that says "Open Panel" still only opens it.
+    func togglePanel() {
         if panelWindow?.isVisible == true {
             hidePanel()
         } else {

@@ -38,8 +38,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController = StatusItemController(preview: preview)
     }
 
+    // 程序坞图标和悬浮窗一样是开关：已经打开时再点一次把它收起来。
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        statusController?.openPanel()
+        mainTrace("reopen visible=\(flag)")
+        statusController?.togglePanel()
         return false
     }
 
