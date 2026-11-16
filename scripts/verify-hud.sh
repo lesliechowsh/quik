@@ -79,7 +79,7 @@ else
 fi
 sleep 3
 late="$(swift scripts/window-bounds.swift Quik 2>/dev/null | awk '/^window=/' | sed -n 's/.*w:\([0-9]*\).*/\1/p' | awk '$1 > 100')"
-if [ "$late" = "128" ]; then
+if [ "$late" = "116" ]; then
   echo "PASS 面板关闭后悬浮窗还在"
 else
   echo "FAIL 面板关闭后悬浮窗状态不对 (windows=$late)"
