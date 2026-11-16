@@ -13,7 +13,7 @@ final class HUDController: NSObject, NSMenuDelegate {
     private static let originXKey = "hudOriginX"
     private static let originYKey = "hudOriginY"
 
-    private let size = CGSize(width: 200, height: 62)
+    private let size = CGSize(width: 128, height: 36)
 
     init(store: QuikStore, onTap: @escaping () -> Void, onToggleVisibility: @escaping () -> Void) {
         self.store = store
@@ -37,6 +37,9 @@ final class HUDController: NSObject, NSMenuDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        // The window floats over other apps. Let a little of what is behind it
+        // through, so it reads as an overlay instead of a solid tile.
+        panel.alphaValue = 0.86
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovableByWindowBackground = true
@@ -186,32 +189,32 @@ struct HUDView: View {
     }
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(accent)
-                .frame(width: 9, height: 9)
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: 7, height: 7)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(store.advanced ? "\(assessment.score)  \(Copy.level(assessment.level))" : Copy.level(assessment.level))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(.ultraThinMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(.white.opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(0.10), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
