@@ -23,14 +23,14 @@ quik --json
 - `score`：0-100，越高越卡。40 以上算明显卡顿。
 - `summary`：一句现成的中文结论，可以直接说给用户。
 - `causes`：按贡献排序的原因。`kind` 取值 cpu / memory / disk / scheduling / thermal，`contribution` 是 0-100 的贡献度。
-- `culprits`：最占资源的进程，排最前的是主因。`cpuCores` 是折算成几个 CPU 核，`diskMBps` 是每秒读写 MB，`memoryMB` 是内存占用，`role` 是它在应用里的分工（比如"页面渲染"）。
+- `culprits`：最占资源的应用，排最前的是主因。每个应用一行，同一应用的 helper 合并成一行。`cpuCores` 折算成几个 CPU 核，`diskMBps` 是每秒读写 MB，两者都是整行相加；`memoryMB` 是行内最大成员进程的占用，不是应用总量；`pid` 是代表进程，可用于采样/诊断；`role` 是它在应用里的分工（比如"页面渲染"）。
 - `schedulerJankMs`：调度延迟毫秒，反映点击后要等多久才有反应。
 - `memoryPressure` / `thermal`：内存压力与温度，critical 表示内核已经开始干预。
 
 ## 回答用户
 
 - 卡：直接引用 `summary`，点名 `culprits[0].name`，说明它的 `role`。不要自己再跑 top、ps 或 sample，Quik 已经做过这些。
-- 用户想结束卡顿进程时，先 `kill -0 <pid>` 确认它还在，再执行 `kill <pid>`。结束进程会丢它没保存的内容，先向用户确认再动手。
+- 结束卡顿要退整个应用，在 Quik 面板点「结束」，或 `osascript -e 'quit app "<name>"'`。只 `kill <pid>` 只会杀掉一个 helper，应用会继续吃资源。真要 kill 前先向用户确认。
 - 不卡：直接说流畅。不要展开一串数字。
 
 ## 边界

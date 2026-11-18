@@ -81,7 +81,7 @@ fi
 python3 -I - "$JSON_OUT" <<'EOF' || fail=1
 import json, sys
 j = json.load(open(sys.argv[1]))
-assert j.get('schema') == 1, j.get('schema')
+assert j.get('schema') == 2, j.get('schema')
 assert j.get('level') in ('fluid', 'sluggish', 'stalled'), j.get('level')
 assert isinstance(j.get('summary'), str) and j['summary'], j.get('summary')
 assert isinstance(j.get('culprits'), list), j.get('culprits')
@@ -90,8 +90,11 @@ print('PASS json has schema, level, summary, causes, culprits')
 EOF
 
 TEXT="$("$CLI")"
+# The status file's labels are the English agent contract by design, so text
+# mode names the state in English; the Chinese names stay accepted in case the
+# contract ever localizes again.
 case "$TEXT" in
-  流畅*|有点卡*|卡住了*) echo "PASS text mode names the state first" ;;
+  Fluid*|Sluggish*|Stalled*|流畅*|有点卡*|卡住了*) echo "PASS text mode names the state first" ;;
   *) echo "FAIL unexpected text output: $TEXT"; fail=1 ;;
 esac
 

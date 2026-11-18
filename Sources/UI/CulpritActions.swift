@@ -32,19 +32,27 @@ enum CulpritActions {
     }
 
     static func quit(_ culprit: Culprit, completion: @escaping (Bool) -> Void) {
-        let target = culprit.app?.ownerPid ?? culprit.pid
-        if let app = NSRunningApplication(processIdentifier: target), !app.isTerminated {
+        var targets: [pid_t] = []
+        if let ownerPid = culprit.app?.ownerPid,
+           let app = NSRunningApplication(processIdentifier: ownerPid), !app.isTerminated {
             app.terminate()
+            targets = [ownerPid]
+        } else if let bundlePath = culprit.app?.bundlePath,
+                  let app = NSWorkspace.shared.runningApplications
+                      .first(where: { $0.bundleURL?.path == bundlePath }), !app.isTerminated {
+            app.terminate()
+            targets = [app.processIdentifier]
         } else {
-            kill(target, SIGTERM)
+            targets = culprit.memberPids.isEmpty ? [culprit.pid] : culprit.memberPids
+            for pid in targets { kill(pid, SIGTERM) }
         }
-        waitUntilGone(target, deadline: 6, completion: completion)
+        waitUntilGone(targets, deadline: 6, completion: completion)
     }
 
-    private static func waitUntilGone(_ pid: pid_t, deadline: TimeInterval, completion: @escaping (Bool) -> Void) {
+    private static func waitUntilGone(_ pids: [pid_t], deadline: TimeInterval, completion: @escaping (Bool) -> Void) {
         let started = Date()
         func check() {
-            if !isRunning(pid) { return completion(true) }
+            if pids.allSatisfy({ !isRunning($0) }) { return completion(true) }
             if Date().timeIntervalSince(started) >= deadline { return completion(false) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: check)
         }

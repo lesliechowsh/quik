@@ -32,7 +32,7 @@ final class StatusSnapshotTests: XCTestCase {
         let data = try XCTUnwrap(snapshot.encode())
         let text = try XCTUnwrap(String(data: data, encoding: .utf8))
 
-        XCTAssertTrue(text.contains("\"schema\" : 1"))
+        XCTAssertTrue(text.contains("\"schema\" : 2"))
         XCTAssertTrue(text.contains("\"level\" : \"sluggish\""))
         XCTAssertTrue(text.contains("\"memoryPressure\" : \"warning\""))
         XCTAssertTrue(text.contains("\"thermal\" : \"fair\""))

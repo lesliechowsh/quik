@@ -2,7 +2,9 @@ import Foundation
 
 /// The machine-readable view of one assessment. This is the contract between
 /// the running app and every agent that reads the status file, so it changes
-/// only by bumping `schema`.
+/// only by bumping `schema`. Culprits are per-app rows: cpuCores and diskMBps
+/// are app-wide sums, memoryMB is the largest member's footprint, and pid is
+/// the representative member, the one a sample action should target.
 struct SnapshotCause: Codable, Equatable, Sendable {
     let kind: String
     let label: String
@@ -39,7 +41,7 @@ struct StatusSnapshot: Codable, Equatable, Sendable {
     let thermal: String
 
     init(assessment: StallAssessment, appVersion: String) {
-        self.schema = 1
+        self.schema = 2
         self.appVersion = appVersion
         self.at = assessment.at
         self.level = assessment.level.caseName

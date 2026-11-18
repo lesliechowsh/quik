@@ -131,18 +131,145 @@ final class StallEvaluatorTests: XCTestCase {
         let processes = [
             ProcessDelta(pid: 42, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: 3.0, diskBytesPerSecond: 0, footprintBytes: 0)
         ]
-        var assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, at: Date())
-        for _ in 0..<3 {
-            assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, at: Date())
-        }
-        XCTAssertEqual(assessment.culprits.first?.displayName, "Slack Helper (Renderer)")
-
-        let named = assessment.attaching([
+        let owners: [pid_t: AppIdentity] = [
             42: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering)
-        ])
-        XCTAssertEqual(named.culprits.first?.displayName, "Slack")
-        XCTAssertEqual(named.culprits.first?.app?.role, .pageRendering)
-        XCTAssertTrue(Copy.menuTitle(named, advanced: true, .base).hasPrefix("Slack"))
+        ]
+        var assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        for _ in 0..<3 {
+            assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        }
+        XCTAssertEqual(assessment.culprits.first?.displayName, "Slack")
+        XCTAssertEqual(assessment.culprits.first?.app?.role, .pageRendering)
+        XCTAssertTrue(Copy.menuTitle(assessment, advanced: true, .base).hasPrefix("Slack"))
+    }
+
+    func testHelpersOfOneAppBecomeOneRow() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 100, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 101, name: "Slack Helper (GPU)", attribution: .measured, cpuOneCore: 1.0, diskBytesPerSecond: 0, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            100: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering),
+            101: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .graphics)
+        ]
+        var assessment = StallAssessment.idle()
+        for _ in 0..<2 {
+            assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.95), processes: processes, owners: owners, at: Date())
+        }
+        XCTAssertEqual(assessment.culprits.count, 1)
+        XCTAssertEqual(assessment.culprits.first?.displayName, "Slack")
+        XCTAssertEqual(assessment.culprits.first?.cpuOneCore ?? 0, 3.0, accuracy: 0.001)
+        XCTAssertEqual(Set(assessment.culprits.first?.memberPids ?? []), [100, 101])
+    }
+
+    func testReasonMemberBecomesRepresentative() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 210, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: 0.1, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 211, name: "Slack Helper (GPU)", attribution: .measured, cpuOneCore: 0.3, diskBytesPerSecond: 300 * 1_048_576, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            210: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering),
+            211: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .graphics)
+        ]
+        let assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        XCTAssertEqual(assessment.culprits.count, 1)
+        XCTAssertEqual(assessment.culprits.first?.pid, 211)
+    }
+
+    func testRepresentativeHoldsUntilChallengerLeadsClearly() {
+        var evaluator = StallEvaluator()
+        func sweep(_ a: Double, _ b: Double) -> StallAssessment {
+            let processes = [
+                ProcessDelta(pid: 220, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: a, diskBytesPerSecond: 0, footprintBytes: 0),
+                ProcessDelta(pid: 221, name: "Slack Helper (GPU)", attribution: .measured, cpuOneCore: b, diskBytesPerSecond: 0, footprintBytes: 0)
+            ]
+            let owners: [pid_t: AppIdentity] = [
+                220: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering),
+                221: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .graphics)
+            ]
+            return evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        }
+        XCTAssertEqual(sweep(2.0, 1.0).culprits.first?.pid, 220)
+        XCTAssertEqual(sweep(1.9, 2.0).culprits.first?.pid, 220, "挑战者只高一点不该换代表")
+        XCTAssertEqual(sweep(1.9, 4.5).culprits.first?.pid, 221)
+    }
+
+    func testMemoryUsesLargestMemberNotSum() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 230, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: 0.1, diskBytesPerSecond: 0, footprintBytes: 1_500 * 1_048_576),
+            ProcessDelta(pid: 231, name: "Slack Helper (GPU)", attribution: .measured, cpuOneCore: 0.1, diskBytesPerSecond: 0, footprintBytes: 500 * 1_048_576)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            230: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering),
+            231: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .graphics)
+        ]
+        let assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.2), processes: processes, owners: owners, at: Date())
+        XCTAssertEqual(assessment.culprits.count, 1)
+        XCTAssertEqual(assessment.culprits.first?.footprintBytes, 1_500 * 1_048_576)
+    }
+
+    func testUnrelatedSameNameProcessesDoNotMerge() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 240, name: "node", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 241, name: "node", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            240: AppIdentity(name: "node", bundlePath: nil, role: nil),
+            241: AppIdentity(name: "node", bundlePath: nil, role: nil)
+        ]
+        let assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        XCTAssertEqual(assessment.culprits.count, 2)
+    }
+
+    func testSystemDaemonsShareOneRow() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 250, name: "mdworker_shared", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 251, name: "mdworker_shared", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            250: AppIdentity(name: "Spotlight", bundlePath: nil, role: nil, isSystem: true),
+            251: AppIdentity(name: "Spotlight", bundlePath: nil, role: nil, isSystem: true)
+        ]
+        let assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        XCTAssertEqual(assessment.culprits.count, 1)
+        XCTAssertEqual(Set(assessment.culprits.first?.memberPids ?? []), [250, 251])
+    }
+
+    func testSummedHelpersClearTheEntryFloor() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 200, name: "Slack Helper (Renderer)", attribution: .measured, cpuOneCore: 0.55, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 201, name: "Slack Helper (GPU)", attribution: .measured, cpuOneCore: 0.55, diskBytesPerSecond: 0, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            200: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .pageRendering),
+            201: AppIdentity(name: "Slack", bundlePath: "/Applications/Slack.app", role: .graphics)
+        ]
+        var assessment = StallAssessment.idle()
+        for _ in 0..<2 {
+            assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        }
+        XCTAssertEqual(assessment.culprits.count, 1)
+        XCTAssertEqual(assessment.culprits.first?.displayName, "Slack")
+    }
+
+    func testDifferentAppsStaySeparate() {
+        var evaluator = StallEvaluator()
+        let processes = [
+            ProcessDelta(pid: 300, name: "A Helper", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0),
+            ProcessDelta(pid: 301, name: "B Helper", attribution: .measured, cpuOneCore: 2.0, diskBytesPerSecond: 0, footprintBytes: 0)
+        ]
+        let owners: [pid_t: AppIdentity] = [
+            300: AppIdentity(name: "A", bundlePath: "/Applications/A.app", role: .graphics),
+            301: AppIdentity(name: "B", bundlePath: "/Applications/B.app", role: .graphics)
+        ]
+        let assessment = evaluator.evaluate(delta: delta(cpuBusy: 0.9), processes: processes, owners: owners, at: Date())
+        XCTAssertEqual(assessment.culprits.count, 2)
     }
 
     func testDiskWriteSurfacesAsCause() {

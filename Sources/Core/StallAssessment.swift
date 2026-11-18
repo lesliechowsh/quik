@@ -85,10 +85,21 @@ struct AppIdentity: Sendable, Equatable {
     let role: ProcessRole?
     var ownerPid: pid_t? = nil
     var isSystem = false
+
+    /// Two processes share a row when this matches. The role is left out on
+    /// purpose, so an app's helpers collapse into the app the user acts on.
+    var groupKey: String? {
+        if let bundlePath { return "app:" + bundlePath }
+        if let role, case .workingDirectory(let folder) = role {
+            return "proc:" + name + ":" + folder
+        }
+        if isSystem { return "proc:" + name }
+        // Two unrelated processes sharing only a name must not share a row.
+        return nil
+    }
 }
 
 struct Culprit: Sendable, Identifiable {
-    var id: pid_t { pid }
     let pid: pid_t
     let name: String
     let attribution: Attribution
@@ -97,29 +108,13 @@ struct Culprit: Sendable, Identifiable {
     let footprintBytes: UInt64
     let score: Int
     let reason: CulpritReason
+    var groupKey: String = ""
+    var memberPids: [pid_t] = []
     var app: AppIdentity? = nil
 
-    var displayName: String { app?.name ?? name }
-}
+    var id: String { groupKey.isEmpty ? "pid:\(pid)" : groupKey }
 
-extension StallAssessment {
-    func attaching(_ owners: [pid_t: AppIdentity]) -> StallAssessment {
-        guard !owners.isEmpty else { return self }
-        return StallAssessment(
-            at: at, score: score, level: level, stableCause: stableCause, causes: causes,
-            culprits: culprits.map { culprit in
-                var copy = culprit
-                copy.app = owners[culprit.pid]
-                return copy
-            },
-            cpuBusy: cpuBusy, cpuCores: cpuCores, memoryPressure: memoryPressure,
-            compressorBytes: compressorBytes, swapUsedBytes: swapUsedBytes,
-            diskReadBytesPerSecond: diskReadBytesPerSecond,
-            diskWriteBytesPerSecond: diskWriteBytesPerSecond,
-            schedulerJankMs: schedulerJankMs, thermal: thermal,
-            measuredCPUShare: measuredCPUShare
-        )
-    }
+    var displayName: String { app?.name ?? name }
 }
 
 struct StallAssessment: Sendable {

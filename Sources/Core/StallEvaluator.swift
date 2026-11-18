@@ -12,7 +12,8 @@ struct StallEvaluator: Sendable {
     private var state = StallState()
     private var recentScores: [Int] = []
     private var previousCauseOrder: [CauseKind] = []
-    private var previousRank: [pid_t] = []
+    private var previousRank: [String] = []
+    private var previousRep: [String: pid_t] = [:]
     private var recentCauseLoad: [CauseKind: Double] = [:]
     private var stableCauseKind: CauseKind?
 
@@ -32,7 +33,12 @@ struct StallEvaluator: Sendable {
     private static let rankMargin = 1.25
     private static let causeMargin = 1.25
 
-    mutating func evaluate(delta: SystemDelta, processes: [ProcessDelta], at: Date) -> StallAssessment {
+    mutating func evaluate(
+        delta: SystemDelta,
+        processes: [ProcessDelta],
+        owners: [pid_t: AppIdentity] = [:],
+        at: Date
+    ) -> StallAssessment {
         let rawCauses = causes(for: delta)
         let causes = stableCauses(rawCauses)
         rememberScore(compositeScore(rawCauses, delta))
@@ -52,7 +58,7 @@ struct StallEvaluator: Sendable {
             level: state.level,
             stableCause: stableCauseKind,
             causes: causes,
-            culprits: rank(processes: processes, delta: delta, busyCores: busyCores),
+            culprits: rank(processes: processes, owners: owners, delta: delta, busyCores: busyCores),
             cpuBusy: delta.cpuBusy,
             cpuCores: delta.cpuCores,
             memoryPressure: delta.memoryPressure,
@@ -290,41 +296,56 @@ struct StallEvaluator: Sendable {
         }
     }
 
-    /// Rows keep their place until a challenger is clearly ahead. Without the
-    /// margin, two helpers of the same app trade places every sweep while their
-    /// smoothed load is within a couple of percent.
-    private mutating func rank(processes: [ProcessDelta], delta: SystemDelta, busyCores: Double) -> [Culprit] {
+    /// Rows are per app because that is what the user acts on.
+    private mutating func rank(
+        processes: [ProcessDelta],
+        owners: [pid_t: AppIdentity],
+        delta: SystemDelta,
+        busyCores: Double
+    ) -> [Culprit] {
         let previouslyRanked = Set(previousRank)
-        let scored: [Culprit] = processes
-            .filter { $0.attribution == .measured }
-            .filter { $0.cpuOneCore > 0.02 || $0.diskBytesPerSecond > 1_048_576 || $0.footprintBytes > 500 * 1_048_576 }
-            .map { proc -> Culprit in
-                let cpuShare = busyCores > 0 ? min(proc.cpuOneCore / busyCores, 1) : 0
-                let cpuScore = cpuShare * 200
-                let diskScore = min(proc.diskBytesPerSecond / (200 * 1_048_576), 1) * 100
-                let memScore = min(Double(proc.footprintBytes) / (8 * 1_073_741_824), 1) * 60
-                let score = max(cpuScore, diskScore, memScore)
-                return Culprit(
-                    pid: proc.pid,
-                    name: proc.name,
-                    attribution: proc.attribution,
-                    cpuOneCore: proc.cpuOneCore,
-                    diskBytesPerSecond: UInt64(saturating: proc.diskBytesPerSecond),
-                    footprintBytes: proc.footprintBytes,
-                    score: Int(score.rounded()),
-                    reason: reason(for: proc, cpuShare: cpuShare)
-                )
-            }
-            .filter { $0.score >= (previouslyRanked.contains($0.pid) ? Self.rankRetainFloor : Self.rankEntryFloor) }
-            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.pid < $1.pid }
+        let groups = Dictionary(grouping: processes.filter {
+            $0.attribution == .measured
+                && ($0.cpuOneCore > 0.02 || $0.diskBytesPerSecond > 1_048_576 || $0.footprintBytes > 500 * 1_048_576)
+        }, by: { owners[$0.pid]?.groupKey ?? "pid:\($0.pid)" })
+
+        var scored: [(key: String, culprit: Culprit)] = []
+        for (key, members) in groups {
+            let cpu = members.reduce(0.0) { $0 + $1.cpuOneCore }
+            let disk = members.reduce(0.0) { $0 + Double($1.diskBytesPerSecond) }
+            let footprint = members.map(\.footprintBytes).max() ?? 0
+            let cpuShare = busyCores > 0 ? min(cpu / busyCores, 1) : 0
+            let cpuScore = cpuShare * 200
+            let diskScore = min(disk / (200 * 1_048_576), 1) * 100
+            let memScore = min(Double(footprint) / (8 * 1_073_741_824), 1) * 60
+            let score = Int(max(cpuScore, diskScore, memScore).rounded())
+            let floor = previouslyRanked.contains(key) ? Self.rankRetainFloor : Self.rankEntryFloor
+            guard score >= floor else { continue }
+            let groupReason = reason(cpu: cpu, disk: disk, footprint: footprint, cpuShare: cpuShare)
+            let representative = pickRepresentative(key: key, members: members, reason: groupReason)
+            scored.append((key, Culprit(
+                pid: representative.pid,
+                name: representative.name,
+                attribution: .measured,
+                cpuOneCore: cpu,
+                diskBytesPerSecond: UInt64(saturating: disk),
+                footprintBytes: footprint,
+                score: score,
+                reason: groupReason,
+                groupKey: key,
+                memberPids: members.map(\.pid),
+                app: owners[representative.pid]
+            )))
+        }
+        scored.sort { $0.culprit.score != $1.culprit.score ? $0.culprit.score > $1.culprit.score : $0.culprit.pid < $1.culprit.pid }
 
         let candidates = Array(scored.prefix(20))
-        let byPid = Dictionary(uniqueKeysWithValues: candidates.map { ($0.pid, $0) })
-        var order = previousRank.filter { byPid[$0] != nil }
+        let byKey = Dictionary(uniqueKeysWithValues: candidates.map { ($0.key, $0.culprit) })
+        var order = previousRank.filter { byKey[$0] != nil }
         var included = Set(order)
-        for culprit in candidates where !included.contains(culprit.pid) {
-            order.append(culprit.pid)
-            included.insert(culprit.pid)
+        for candidate in candidates where !included.contains(candidate.key) {
+            order.append(candidate.key)
+            included.insert(candidate.key)
         }
 
         var swapped = true
@@ -333,7 +354,7 @@ struct StallEvaluator: Sendable {
             swapped = false
             passes += 1
             for index in 0..<max(0, order.count - 1) {
-                guard let a = byPid[order[index]], let b = byPid[order[index + 1]] else { continue }
+                guard let a = byKey[order[index]], let b = byKey[order[index + 1]] else { continue }
                 if Double(b.score) > Double(a.score) * Self.rankMargin + 4 {
                     order.swapAt(index, index + 1)
                     swapped = true
@@ -342,21 +363,53 @@ struct StallEvaluator: Sendable {
         }
 
         previousRank = Array(order.prefix(8))
-        return Array(order.prefix(5)).compactMap { byPid[$0] }
+        previousRep = Dictionary(uniqueKeysWithValues: scored.map { ($0.key, $0.culprit.pid) })
+        return Array(order.prefix(5)).compactMap { byKey[$0] }
     }
 
-    private func reason(for proc: ProcessDelta, cpuShare: Double) -> CulpritReason {
+    /// The row's reason names one member, so the row's sample action must open
+    /// that member's stack.
+    private mutating func pickRepresentative(
+        key: String,
+        members: [ProcessDelta],
+        reason: CulpritReason
+    ) -> ProcessDelta {
+        switch reason {
+        case .cpuShare, .cpuCores:
+            let maxCpu = members.map(\.cpuOneCore).max() ?? 0
+            if let held = members.first(where: { $0.pid == previousRep[key] }),
+               held.cpuOneCore >= maxCpu / Self.rankMargin {
+                return held
+            }
+            return maxMember(members) { $0.cpuOneCore }
+        case .disk:
+            return maxMember(members) { Double($0.diskBytesPerSecond) }
+        case .memory:
+            return maxMember(members) { Double($0.footprintBytes) }
+        case .none:
+            return maxMember(members) { $0.cpuOneCore }
+        }
+    }
+
+    private func maxMember(_ members: [ProcessDelta], _ value: (ProcessDelta) -> Double) -> ProcessDelta {
+        members.max { a, b in
+            let (va, vb) = (value(a), value(b))
+            return va != vb ? va < vb : a.pid > b.pid
+        } ?? members[0]
+    }
+
+    private func reason(cpu: Double, disk: Double, footprint: UInt64, cpuShare: Double) -> CulpritReason {
         if cpuShare > 0.2 {
             return .cpuShare(percent: Int((cpuShare * 100).rounded()))
         }
-        if proc.cpuOneCore >= 0.5 {
-            return .cpuCores(proc.cpuOneCore)
+        if cpu >= 0.5 {
+            return .cpuCores(cpu)
         }
-        if proc.diskBytesPerSecond > 5 * 1_048_576 {
-            return .disk(bytesPerSecond: proc.diskBytesPerSecond)
+        if disk > 5 * 1_048_576 {
+            return .disk(bytesPerSecond: disk)
         }
-        if proc.footprintBytes > 1_073_741_824 {
-            return .memory(bytes: Double(proc.footprintBytes))
+        if footprint > 1_073_741_824 {
+            return .memory(bytes: Double(footprint))
         }
         return .none
     }

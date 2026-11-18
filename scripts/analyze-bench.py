@@ -4,7 +4,10 @@ import re
 import statistics
 import sys
 
-PATTERN = re.compile(r"level=(\d+) score=(\d+) busy=(\d+)% jank95=([\d.]+) baseline=([\d.]+)")
+PATTERN = re.compile(
+    r"level=(\d+) score=(\d+) busy=(\d+)% cores=(\d+) jank95=([\d.]+) baseline=([\d.]+) "
+    r"measured=([\d.]+) share=([\d.]+)"
+)
 
 
 def load(path):
@@ -17,8 +20,11 @@ def load(path):
                     "level": int(match.group(1)),
                     "score": int(match.group(2)),
                     "busy": int(match.group(3)),
-                    "jank": float(match.group(4)),
-                    "baseline": float(match.group(5)),
+                    "cores": int(match.group(4)),
+                    "jank": float(match.group(5)),
+                    "baseline": float(match.group(6)),
+                    "measured": float(match.group(7)),
+                    "share": float(match.group(8)),
                 })
     # Each segment file is a full copy of the log, so keep only the tail that
     # belongs to that segment.
@@ -67,14 +73,29 @@ def main():
     load_busy = statistics.median(row["busy"] for row in data["load"])
     load_score = statistics.median(row["score"] for row in data["load"])
     load_alert = sum(1 for row in data["load"] if row["level"] > 0) / len(data["load"])
+    load_share = statistics.median(row["share"] for row in data["load"])
+    load_measured = statistics.median(row["measured"] for row in data["load"])
+    load_cores = statistics.median(row["cores"] for row in data["load"])
 
     print()
     print(f"busy rise: {load_busy - base_busy:+.0f} points")
     print(f"load score median: {load_score:.0f}")
     print(f"load segment flagged non-fluid: {load_alert:.0%}")
+    print(f"load measured: {load_measured:.1f} cores of {load_cores:.0f} busy, {load_share:.0%} of busy cores")
     print(f"latency ratio load/baseline: {ratio:.2f}x (expected near 1, QoS protects interaction)")
 
-    ok = load_busy - base_busy >= 30 and load_score >= 40 and load_alert >= 0.5
+    # The load is the script's own same-user processes, so the probe must see a
+    # large part of the busy cores it reports. A per-process reading scaled
+    # wrong (Mach ticks read as nanoseconds) shows up as a near-zero share; the
+    # upper bound rules out the opposite failure, a reading that claims more
+    # than the machine has.
+    ok = (
+        load_busy - base_busy >= 30
+        and load_score >= 40
+        and load_alert >= 0.5
+        and load_share >= 0.3
+        and load_measured <= load_cores * 1.3
+    )
     if data["recovery"]:
         recover_jank = statistics.median(row["jank"] for row in data["recovery"])
         recovered = data["recovery"][-1]["level"] == 0

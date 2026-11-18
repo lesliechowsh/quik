@@ -34,8 +34,7 @@ if arguments.contains("--json") {
     print("\(snapshot.levelLabel) \(snapshot.score)/100")
     print(snapshot.summary)
     if let top = snapshot.culprits.first {
-        var parts = ["pid \(top.pid)"]
-        parts.append("CPU \(String(format: "%.1f", top.cpuCores)) 核")
+        var parts = ["CPU \(String(format: "%.1f", top.cpuCores)) 核"]
         if top.diskMBps > 0 {
             parts.append("磁盘 \(String(format: "%.1f", top.diskMBps)) MB/s")
         }
@@ -43,7 +42,7 @@ if arguments.contains("--json") {
             parts.append("内存 \(top.memoryMB) MB")
         }
         let role = top.role.map { "（\($0)）" } ?? ""
-        print("主因：\(top.name)\(role) · " + parts.joined(separator: " · "))
+        print("主因：\(top.name)\(role) · 代表进程 pid \(top.pid) · " + parts.joined(separator: " · "))
     }
 }
 

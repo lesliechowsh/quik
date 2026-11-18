@@ -12,6 +12,7 @@ final class MonitorEngine {
     private var lastSystem: RawSystemSnapshot?
     private var lastProcesses: [pid_t: RawProcess] = [:]
     private var lastProcessDeltas: [ProcessDelta] = []
+    private var lastOwners: [pid_t: AppIdentity] = [:]
     private var lastProcessSweepAt: Date?
     private let processSweepInterval: TimeInterval = 3
     private var evaluator = StallEvaluator()
@@ -91,9 +92,9 @@ final class MonitorEngine {
             lastProcesses = Dictionary(uniqueKeysWithValues: processes.map { ($0.pid, $0) })
             lastProcessDeltas = processDeltas
             lastProcessSweepAt = snapshot.at
+            lastOwners = AppOwnerResolver.resolve(processes.map(\.pid))
         }
-        var assessment = evaluator.evaluate(delta: delta, processes: processDeltas, at: snapshot.at)
-        assessment = assessment.attaching(AppOwnerResolver.resolve(assessment.culprits.map(\.pid)))
+        let assessment = evaluator.evaluate(delta: delta, processes: processDeltas, owners: lastOwners, at: snapshot.at)
         onSnapshot?(StatusSnapshot(assessment: assessment, appVersion: Bundle.main.shortVersion))
 
         if ProcessInfo.processInfo.environment["QUIK_DEBUG"] == "1" {
@@ -119,8 +120,8 @@ final class MonitorEngine {
         let measured = processes.filter { $0.attribution == .measured }.reduce(0) { $0 + $1.cpuOneCore }
         let causes = assessment.causes.map { "\($0.kind.rawValue):\($0.contribution)" }.joined(separator: ",")
         let line = String(
-            format: "level=%d score=%d busy=%.0f%% jank95=%.1f baseline=%.1f measured=%.2f share=%.2f stable=%@ causes=[%@] top=[%@]\n",
-            assessment.level.rawValue, assessment.score, delta.cpuBusy * 100,
+            format: "level=%d score=%d busy=%.0f%% cores=%d jank95=%.1f baseline=%.1f measured=%.2f share=%.2f stable=%@ causes=[%@] top=[%@]\n",
+            assessment.level.rawValue, assessment.score, delta.cpuBusy * 100, delta.cpuCores,
             delta.schedulerJankMs, delta.jankBaselineMs,
             measured, assessment.measuredCPUShare, assessment.stableCause?.rawValue ?? "-", causes, top
         )

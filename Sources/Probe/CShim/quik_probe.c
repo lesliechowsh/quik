@@ -2,8 +2,28 @@
 #include <libproc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <mach/mach_time.h>
+
+// proc_pid_rusage reports CPU time in Mach absolute time units, not the
+// nanoseconds the header promises. On Intel those are the same; on Apple
+// Silicon one tick is 41.67 ns, so the raw value reads 41.67 times too small.
+static mach_timebase_info_data_t timebase;
+static pthread_once_t timebase_once = PTHREAD_ONCE_INIT;
+
+static void timebase_init(void) {
+    if (mach_timebase_info(&timebase) != KERN_SUCCESS) {
+        timebase.numer = 1;
+        timebase.denom = 1;
+    }
+}
+
+static uint64_t ticks_to_ns(uint64_t ticks) {
+    pthread_once(&timebase_once, timebase_init);
+    return (uint64_t)(((unsigned __int128)ticks * timebase.numer) / timebase.denom);
+}
 
 int quik_proc_usage_read(pid_t pid, quik_proc_usage *out) {
     memset(out, 0, sizeof(*out));
@@ -11,7 +31,7 @@ int quik_proc_usage_read(pid_t pid, quik_proc_usage *out) {
     int r = proc_pid_rusage(pid, RUSAGE_INFO_V4, (rusage_info_t *)&ri);
     if (r != 0) { out->err = r; return r; }
     out->ok = 1;
-    out->cpu_ns = ri.ri_user_time + ri.ri_system_time;
+    out->cpu_ns = ticks_to_ns(ri.ri_user_time + ri.ri_system_time);
     out->disk_read_bytes = ri.ri_diskio_bytesread;
     out->disk_write_bytes = ri.ri_diskio_byteswritten;
     out->footprint_bytes = ri.ri_phys_footprint;
